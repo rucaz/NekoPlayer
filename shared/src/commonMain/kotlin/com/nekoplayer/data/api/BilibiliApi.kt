@@ -57,7 +57,7 @@ class BilibiliApi(engine: HttpClientEngine) {
                 artist = video.author,
                 album = "",
                 coverUrl = "https:${video.pic}",
-                duration = video.duration.toLong() * 1000,
+                duration = parseDurationToMillis(video.duration),
                 source = com.nekoplayer.data.model.MusicSource.BILIBILI,
                 sourceId = video.bvid,
                 playUrl = null // 需要单独获取
@@ -93,6 +93,31 @@ class BilibiliApi(engine: HttpClientEngine) {
         }
         val result = response.body<BiliVideoInfoResponse>()
         return result.data?.cid ?: throw Exception("Failed to get CID")
+    }
+}
+
+/**
+ * 解析B站时长字符串为毫秒
+ * 格式: "3:35" (分:秒) 或 "120" (纯秒数)
+ */
+private fun parseDurationToMillis(duration: String): Long {
+    return try {
+        when {
+            // 格式: "3:35" 或 "1:23:45"
+            duration.contains(":") -> {
+                val parts = duration.split(":")
+                val seconds = when (parts.size) {
+                    2 -> parts[0].toInt() * 60 + parts[1].toInt()  // MM:SS
+                    3 -> parts[0].toInt() * 3600 + parts[1].toInt() * 60 + parts[2].toInt()  // HH:MM:SS
+                    else -> 0
+                }
+                seconds * 1000L
+            }
+            // 格式: 纯数字秒数
+            else -> duration.toInt() * 1000L
+        }
+    } catch (e: Exception) {
+        0L // 解析失败返回0
     }
 }
 

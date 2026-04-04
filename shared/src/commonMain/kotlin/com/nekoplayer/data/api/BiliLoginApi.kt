@@ -43,7 +43,10 @@ class BiliLoginApi(engine: HttpClientEngine) {
      * 获取登录二维码
      */
     suspend fun getLoginQrCode(): QrCodeResult {
-        val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate")
+        val timestamp = System.currentTimeMillis()
+        val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate") {
+            parameter("_", timestamp) // 防止缓存
+        }
         val result = response.body<BiliQrResponse>()
         
         return if (result.code == 0 && result.data != null) {
@@ -61,11 +64,19 @@ class BiliLoginApi(engine: HttpClientEngine) {
      * @return 扫码状态
      */
     suspend fun pollLoginStatus(qrcodeKey: String): LoginStatus {
+        val timestamp = System.currentTimeMillis()
         val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/poll") {
             parameter("qrcode_key", qrcodeKey)
+            parameter("source", "main-fe-header")
+            parameter("_", timestamp) // 防止缓存
         }
         
         val result = response.body<BiliPollResponse>()
+        
+        // 处理外层code非0的情况
+        if (result.code != 0) {
+            return LoginStatus.Error(result.message ?: "请求失败")
+        }
         
         return when (result.data?.code) {
             86101 -> LoginStatus.WaitingScan      // 未扫码
@@ -74,10 +85,17 @@ class BiliLoginApi(engine: HttpClientEngine) {
             0 -> {
                 // 登录成功，从Cookie或URL中获取凭证
                 val url = result.data.url
+                if (url.isEmpty()) {
+                    return LoginStatus.Error("登录成功但未返回凭证")
+                }
                 val cookies = extractCookies(url)
-                LoginStatus.Success(cookies)
+                if (cookies.isValid()) {
+                    LoginStatus.Success(cookies)
+                } else {
+                    LoginStatus.Error("未能提取有效凭证")
+                }
             }
-            else -> LoginStatus.Error(result.data?.message ?: "未知错误")
+            else -> LoginStatus.Error(result.data?.message ?: "未知错误 (code: ${result.data?.code})")
         }
     }
     
