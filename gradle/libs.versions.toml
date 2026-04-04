@@ -11,6 +11,7 @@ media3 = "1.2.0"
 okio = "3.6.0"
 voyager = "1.0.0"
 coil = "3.0.0-alpha03"
+multiplatform-settings = "1.1.1"
 
 [libraries]
 # Compose
@@ -47,8 +48,9 @@ voyager-koin = { module = "cafe.adriel.voyager:voyager-koin", version.ref = "voy
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 coil-network-ktor = { module = "io.coil-kt.coil3:coil-network-ktor", version.ref = "coil" }
 
-# OkIO
-okio = { module = "com.squareup.okio:okio", version.ref = "okio" }
+# Multiplatform Settings
+multiplatform-settings = { module = "com.russhwolf:multiplatform-settings", version.ref = "multiplatform-settings" }
+multiplatform-settings-noarg = { module = "com.russhwolf:multiplatform-settings-no-arg", version.ref = "multiplatform-settings" }
 
 [bundles]
 ktor-common = ["ktor-client-core", "ktor-client-content-negotiation", "ktor-client-logging", "ktor-serialization-json"]
