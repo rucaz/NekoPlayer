@@ -28,6 +28,7 @@ import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.ui.viewmodel.SearchViewModel
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -39,11 +40,13 @@ class SearchScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val viewModel: SearchViewModel = koinInject()
+        val scope = rememberCoroutineScope()
         
         val searchQuery by viewModel.searchQuery.collectAsState()
         val searchResults by viewModel.searchResults.collectAsState()
         val isLoading by viewModel.isLoading.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
+        val isLoadingPlayUrl by viewModel.isLoadingPlayUrl.collectAsState()
         
         Box(
             modifier = Modifier
@@ -82,12 +85,18 @@ class SearchScreen : Screen {
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(searchResults) { song ->
+                    items(searchResults, key = { it.id }) { song ->
                         SongItem(
                             song = song,
                             onClick = {
-                                // 跳转到播放界面
-                                navigator?.push(NowPlayingScreen(song))
+                                scope.launch {
+                                    // 获取播放链接
+                                    val songWithUrl = viewModel.getPlayUrl(song)
+                                    if (songWithUrl != null) {
+                                        // 跳转到播放界面
+                                        navigator.push(NowPlayingScreen(songWithUrl))
+                                    }
+                                }
                             }
                         )
                     }

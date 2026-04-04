@@ -28,6 +28,9 @@ class SearchViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
     
+    private val _isLoadingPlayUrl = MutableStateFlow(false)
+    val isLoadingPlayUrl: StateFlow<Boolean> = _isLoadingPlayUrl.asStateFlow()
+    
     fun onSearchQueryChange(query: String) {
         _searchQuery.value = query
     }
@@ -51,6 +54,30 @@ class SearchViewModel(
             } finally {
                 _isLoading.value = false
             }
+        }
+    }
+    
+    /**
+     * 获取歌曲播放链接
+     */
+    suspend fun getPlayUrl(song: Song): Song? {
+        if (!song.playUrl.isNullOrEmpty()) return song
+        
+        _isLoadingPlayUrl.value = true
+        
+        return try {
+            val playUrl = bilibiliApi.getPlayUrl(song.sourceId)
+            if (playUrl != null) {
+                song.copy(playUrl = playUrl)
+            } else {
+                _errorMessage.value = "获取播放链接失败"
+                null
+            }
+        } catch (e: Exception) {
+            _errorMessage.value = "获取播放链接失败: ${e.message}"
+            null
+        } finally {
+            _isLoadingPlayUrl.value = false
         }
     }
     
