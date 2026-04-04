@@ -348,11 +348,13 @@ private fun ControlPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 上一首
-            ControlButton(
+            // 上一首按钮
+            IconButton(
                 onClick = { },
-                icon = Icons.Default.SkipPrevious,
-                size = 48.dp
-            )
+                modifier = Modifier.size(48.dp)
+            ) {
+                Text("⏮", color = Color.White, fontSize = 24.sp)
+            }
             
             // 播放/暂停
             val isPlaying = playerState is PlayerState.Playing
@@ -364,11 +366,13 @@ private fun ControlPanel(
             )
             
             // 下一首
-            ControlButton(
+            // 下一首按钮
+            IconButton(
                 onClick = { },
-                icon = Icons.Default.SkipNext,
-                size = 48.dp
-            )
+                modifier = Modifier.size(48.dp)
+            ) {
+                Text("⏭", color = Color.White, fontSize = 24.sp)
+            }
         }
     }
 }
@@ -459,11 +463,10 @@ private fun NeonPlayButton(
                 .background(neonColor.copy(alpha = 0.2f))
         )
         
-        Icon(
-            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-            contentDescription = if (isPlaying) "暂停" else "播放",
-            tint = neonColor,
-            modifier = Modifier.size(36.dp)
+        Text(
+            text = if (isPlaying) "⏸" else "▶",
+            color = neonColor,
+            fontSize = 28.sp
         )
     }
 }

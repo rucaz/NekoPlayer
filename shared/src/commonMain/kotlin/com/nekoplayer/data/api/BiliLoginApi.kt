@@ -4,6 +4,7 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.*
 import io.ktor.client.plugins.*
+import io.ktor.client.plugins.compression.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.plugins.logging.*
 import io.ktor.client.request.*
@@ -24,22 +25,25 @@ class BiliLoginApi(engine: HttpClientEngine) {
             json(Json {
                 ignoreUnknownKeys = true
                 isLenient = true
+                coerceInputValues = true
             })
         }
+        install(ContentEncoding) {
+            gzip()
+            deflate()
+        }
         install(Logging) {
-            level = LogLevel.ALL
+            level = LogLevel.HEADERS
         }
         install(HttpTimeout) {
             requestTimeoutMillis = 30000
             connectTimeoutMillis = 15000
         }
         defaultRequest {
-            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            header("Referer", "https://passport.bilibili.com/login")
-            header("Origin", "https://passport.bilibili.com")
+            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+            header("Referer", "https://passport.bilibili.com")
             header("Accept", "application/json, text/plain, */*")
-            header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
-            header("Accept-Encoding", "gzip, deflate, br")
+            header("Accept-Language", "zh-CN,zh;q=0.9")
         }
     }
     
@@ -47,24 +51,28 @@ class BiliLoginApi(engine: HttpClientEngine) {
      * 获取登录二维码
      */
     suspend fun getLoginQrCode(): QrCodeResult {
-        val timestamp = System.currentTimeMillis()
-        val localId = generateLocalId()
-        
-        val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate") {
-            parameter("source", "main-mini")
-            parameter("local_id", localId)
-            parameter("ts", timestamp)
-        }
-        
-        val result = response.body<BiliQrResponse>()
-        
-        return if (result.code == 0 && result.data != null) {
-            QrCodeResult.Success(
-                qrcodeKey = result.data.qrcode_key,
-                qrUrl = result.data.url
-            )
-        } else {
-            QrCodeResult.Error(result.message ?: "获取二维码失败")
+        return try {
+            val timestamp = System.currentTimeMillis()
+            val localId = generateLocalId()
+            
+            val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate") {
+                parameter("source", "main-mini")
+                parameter("local_id", localId)
+                parameter("ts", timestamp)
+            }
+            
+            val result = response.body<BiliQrResponse>()
+            
+            if (result.code == 0 && result.data != null) {
+                QrCodeResult.Success(
+                    qrcodeKey = result.data.qrcode_key,
+                    qrUrl = result.data.url
+                )
+            } else {
+                QrCodeResult.Error(result.message ?: "获取二维码失败")
+            }
+        } catch (e: Exception) {
+            QrCodeResult.Error("网络请求失败: ${e.message}")
         }
     }
     
@@ -73,38 +81,41 @@ class BiliLoginApi(engine: HttpClientEngine) {
      * @return 扫码状态
      */
     suspend fun pollLoginStatus(qrcodeKey: String): LoginStatus {
-        val timestamp = System.currentTimeMillis()
-        val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/poll") {
-            parameter("qrcode_key", qrcodeKey)
-            parameter("source", "main-fe-header")
-            parameter("_", timestamp) // 防止缓存
-        }
-        
-        val result = response.body<BiliPollResponse>()
-        
-        // 处理外层code非0的情况
-        if (result.code != 0) {
-            return LoginStatus.Error(result.message ?: "请求失败")
-        }
-        
-        return when (result.data?.code) {
-            86101 -> LoginStatus.WaitingScan      // 未扫码
-            86090 -> LoginStatus.WaitingConfirm   // 已扫码，等待确认
-            86038 -> LoginStatus.Expired          // 二维码过期
-            0 -> {
-                // 登录成功，从Cookie或URL中获取凭证
-                val url = result.data.url
-                if (url.isEmpty()) {
-                    return LoginStatus.Error("登录成功但未返回凭证")
-                }
-                val cookies = extractCookies(url)
-                if (cookies.isValid()) {
-                    LoginStatus.Success(cookies)
-                } else {
-                    LoginStatus.Error("未能提取有效凭证")
-                }
+        return try {
+            val timestamp = System.currentTimeMillis()
+            val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/poll") {
+                parameter("qrcode_key", qrcodeKey)
+                parameter("source", "main-fe-header")
+                parameter("_", timestamp)
             }
-            else -> LoginStatus.Error(result.data?.message ?: "未知错误 (code: ${result.data?.code})")
+            
+            val result = response.body<BiliPollResponse>()
+            
+            if (result.code != 0) {
+                return LoginStatus.Error(result.message ?: "请求失败")
+            }
+            
+            when (result.data?.code) {
+                86101 -> LoginStatus.WaitingScan
+                86090 -> LoginStatus.WaitingConfirm
+                86038 -> LoginStatus.Expired
+                0 -> {
+                    val url = result.data?.url ?: ""
+                    if (url.isEmpty()) {
+                        LoginStatus.Error("登录成功但未返回凭证")
+                    } else {
+                        val cookies = extractCookies(url)
+                        if (cookies.isValid()) {
+                            LoginStatus.Success(cookies)
+                        } else {
+                            LoginStatus.Error("未能提取有效凭证")
+                        }
+                    }
+                }
+                else -> LoginStatus.Error(result.data?.message ?: "未知错误 (code: ${result.data?.code})")
+            }
+        } catch (e: Exception) {
+            LoginStatus.Error("网络请求失败: ${e.message}")
         }
     }
     

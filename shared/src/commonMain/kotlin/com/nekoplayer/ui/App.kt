@@ -23,7 +23,7 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 /**
- * App入口 - 使用disposeSteps防止搜索页被销毁
+ * App入口
  */
 @Composable
 fun App() {
@@ -31,8 +31,7 @@ fun App() {
         colorScheme = DarkColorScheme
     ) {
         Navigator(
-            screen = SplashScreen(),
-            disposeSteps = false  // 保留导航栈中的页面，不自动销毁
+            screen = SplashScreen()
         ) { navigator ->
             SlideTransition(navigator)
         }

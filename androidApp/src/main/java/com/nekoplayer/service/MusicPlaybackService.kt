@@ -11,7 +11,8 @@ import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.nekoplayer.R
+import androidx.media.app.NotificationCompat.MediaStyle
+
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
@@ -128,7 +129,7 @@ class MusicPlaybackService : Service() {
             )
             .addAction(android.R.drawable.ic_delete, "停止", stopIntent)
             .setStyle(
-                androidx.media.app.NotificationCompat.MediaStyle()
+                MediaStyle()
                     .setShowActionsInCompactView(0, 1)
             )
             .build()

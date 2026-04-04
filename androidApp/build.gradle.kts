@@ -51,4 +51,5 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     
     implementation(libs.koin.android)
+    implementation(libs.androidx.media)
 }
