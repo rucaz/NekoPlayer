@@ -42,6 +42,9 @@ kotlin {
                 
                 implementation(libs.multiplatform.settings)
                 implementation(libs.multiplatform.settings.noarg)
+                
+                implementation(libs.koin.core)
+                implementation(libs.koin.compose)
             }
         }
         

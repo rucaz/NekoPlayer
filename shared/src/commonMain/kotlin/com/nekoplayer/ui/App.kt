@@ -4,7 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.nekoplayer.ui.screens.NowPlayingScreen
+import cafe.adriel.voyager.navigator.Navigator
+import cafe.adriel.voyager.transitions.SlideTransition
+import com.nekoplayer.ui.screens.SplashScreen
 
 /**
  * App主题颜色
@@ -28,24 +30,8 @@ fun App() {
     MaterialTheme(
         colorScheme = DarkColorScheme
     ) {
-        // 测试数据
-        val testSong = com.nekoplayer.data.model.Song(
-            id = "test",
-            title = "测试歌曲",
-            artist = "测试艺术家",
-            album = "测试专辑",
-            coverUrl = "https://via.placeholder.com/500",
-            duration = 240000,
-            source = com.nekoplayer.data.model.MusicSource.BILIBILI,
-            sourceId = "test",
-            playUrl = null
-        )
-        
-        // 这里会替换为导航逻辑
-        NowPlayingScreen(
-            song = testSong,
-            player = com.nekoplayer.player.AudioPlayer(),
-            onBack = {}
-        )
+        Navigator(SplashScreen()) { navigator ->
+            SlideTransition(navigator)
+        }
     }
 }
