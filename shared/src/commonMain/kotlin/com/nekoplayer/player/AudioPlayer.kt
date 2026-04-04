@@ -25,6 +25,11 @@ expect class AudioPlayer() {
     val waveformData: StateFlow<List<Float>>
     
     /**
+     * 音频总时长（毫秒）
+     */
+    val duration: StateFlow<Long>
+    
+    /**
      * 准备播放
      */
     fun prepare(song: Song)

@@ -23,10 +23,11 @@ actual class AudioPlayer {
     private val _currentPosition = MutableStateFlow(0L)
     actual val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
     
-    // iOS波形数据需要使用MTAudioProcessingTap获取
-    // 这里先用模拟数据
     private val _waveformData = MutableStateFlow(List(64) { 0f })
     actual val waveformData: StateFlow<List<Float>> = _waveformData.asStateFlow()
+    
+    private val _duration = MutableStateFlow(0L)
+    actual val duration: StateFlow<Long> = _duration.asStateFlow()
     
     private var currentSong: Song? = null
     private var timeObserver: Any? = null

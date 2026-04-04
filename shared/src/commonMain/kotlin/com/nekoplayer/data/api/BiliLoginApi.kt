@@ -34,8 +34,12 @@ class BiliLoginApi(engine: HttpClientEngine) {
             connectTimeoutMillis = 15000
         }
         defaultRequest {
-            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-            header("Referer", "https://passport.bilibili.com")
+            header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            header("Referer", "https://passport.bilibili.com/login")
+            header("Origin", "https://passport.bilibili.com")
+            header("Accept", "application/json, text/plain, */*")
+            header("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
+            header("Accept-Encoding", "gzip, deflate, br")
         }
     }
     
@@ -44,9 +48,14 @@ class BiliLoginApi(engine: HttpClientEngine) {
      */
     suspend fun getLoginQrCode(): QrCodeResult {
         val timestamp = System.currentTimeMillis()
+        val localId = generateLocalId()
+        
         val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate") {
-            parameter("_", timestamp) // 防止缓存
+            parameter("source", "main-mini")
+            parameter("local_id", localId)
+            parameter("ts", timestamp)
         }
+        
         val result = response.body<BiliQrResponse>()
         
         return if (result.code == 0 && result.data != null) {
@@ -214,6 +223,23 @@ data class BiliCookies(
     }
     
     fun isValid(): Boolean = sessdata.isNotEmpty()
+}
+
+/**
+ * 生成local_id（B站设备标识）
+ */
+private fun generateLocalId(): String {
+    return buildString {
+        repeat(8) { append((0..15).random().toString(16)) }
+        append("-")
+        repeat(4) { append((0..15).random().toString(16)) }
+        append("-")
+        repeat(4) { append((0..15).random().toString(16)) }
+        append("-")
+        repeat(4) { append((0..15).random().toString(16)) }
+        append("-")
+        repeat(12) { append((0..15).random().toString(16)) }
+    }.uppercase()
 }
 
 // ==================== API响应数据类 ====================

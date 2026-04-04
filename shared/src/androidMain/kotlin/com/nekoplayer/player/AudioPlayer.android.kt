@@ -2,6 +2,8 @@ package com.nekoplayer.player
 
 import android.content.Context
 import android.media.audiofx.Visualizer
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
@@ -9,7 +11,6 @@ import com.nekoplayer.data.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
@@ -22,6 +23,7 @@ actual class AudioPlayer : KoinComponent {
     
     private var exoPlayer: ExoPlayer? = null
     private var visualizer: Visualizer? = null
+    private val handler = Handler(Looper.getMainLooper())
     
     private val _playerState = MutableStateFlow<PlayerState>(PlayerState.Idle)
     actual val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
@@ -29,10 +31,24 @@ actual class AudioPlayer : KoinComponent {
     private val _currentPosition = MutableStateFlow(0L)
     actual val currentPosition: StateFlow<Long> = _currentPosition.asStateFlow()
     
+    private val _duration = MutableStateFlow(0L)
+    actual val duration: StateFlow<Long> = _duration.asStateFlow()
+    
     private val _waveformData = MutableStateFlow(List(64) { 0f })
     actual val waveformData: StateFlow<List<Float>> = _waveformData.asStateFlow()
     
     private var currentSong: Song? = null
+    
+    // 位置更新任务
+    private val positionUpdateRunnable = object : Runnable {
+        override fun run() {
+            exoPlayer?.let { player ->
+                _currentPosition.value = player.currentPosition
+                _duration.value = player.duration.coerceAtLeast(0L)
+            }
+            handler.postDelayed(this, 200) // 200ms更新一次
+        }
+    }
     
     actual fun prepare(song: Song) {
         currentSong = song
@@ -53,11 +69,14 @@ actual class AudioPlayer : KoinComponent {
                 override fun onPlaybackStateChanged(state: Int) {
                     when (state) {
                         Player.STATE_READY -> {
+                            _duration.value = duration.coerceAtLeast(0L)
                             _playerState.value = PlayerState.Playing(song)
                             setupVisualizer(audioSessionId)
+                            startPositionUpdates()
                         }
                         Player.STATE_ENDED -> {
                             _playerState.value = PlayerState.Idle
+                            stopPositionUpdates()
                         }
                         Player.STATE_BUFFERING -> {
                             _playerState.value = PlayerState.Loading
@@ -73,10 +92,12 @@ actual class AudioPlayer : KoinComponent {
                             PlayerState.Paused(song)
                         }
                     }
+                    if (isPlaying) startPositionUpdates() else stopPositionUpdates()
                 }
                 
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                     _playerState.value = PlayerState.Error(error.message ?: "播放错误")
+                    stopPositionUpdates()
                 }
             })
             
@@ -94,6 +115,7 @@ actual class AudioPlayer : KoinComponent {
     
     actual fun stop() {
         exoPlayer?.stop()
+        stopPositionUpdates()
         _playerState.value = PlayerState.Idle
     }
     
@@ -107,6 +129,7 @@ actual class AudioPlayer : KoinComponent {
     }
     
     actual fun release() {
+        stopPositionUpdates()
         try {
             visualizer?.enabled = false
             visualizer?.release()
@@ -115,6 +138,15 @@ actual class AudioPlayer : KoinComponent {
         
         exoPlayer?.release()
         exoPlayer = null
+    }
+    
+    private fun startPositionUpdates() {
+        handler.removeCallbacks(positionUpdateRunnable)
+        handler.post(positionUpdateRunnable)
+    }
+    
+    private fun stopPositionUpdates() {
+        handler.removeCallbacks(positionUpdateRunnable)
     }
     
     /**
