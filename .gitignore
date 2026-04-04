@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+local.properties
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# macOS
+.DS_Store
+
+# iOS
+iosApp/Pods/
+iosApp/*.xcworkspace
+iosApp/xcuserdata/
+iosApp/DerivedData/
+
+# Keystore
+*.keystore
+*.jks
+
+# Misc
+*.log
+*.swp
+*.swo
+*~
