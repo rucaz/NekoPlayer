@@ -34,6 +34,6 @@ val androidModule = module {
 }
 
 /**
- * 跨平台共享模块（后续可扩展）
+ * Android平台Koin模块（actual实现）
  */
-expect fun platformModule(): Module
+actual fun platformModule(): Module = androidModule

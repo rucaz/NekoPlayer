@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -30,6 +33,16 @@ import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
+
+// Custom icons using filled style
+private val Icons.Filled.SkipPrevious: ImageVector
+    get() = Icons.Filled.ArrowBack // Placeholder - we'll create proper icons below
+
+private val Icons.Filled.SkipNext: ImageVector
+    get() = Icons.Filled.ArrowBack // Placeholder
+
+private val Icons.Filled.Pause: ImageVector
+    get() = Icons.Filled.PlayArrow // Placeholder
 
 /**
  * 正在播放界面 - Voyager Screen
@@ -100,7 +113,7 @@ data class NowPlayingScreen(val song: Song) : Screen {
                 ) {
                     IconButton(onClick = { navigator?.pop() }) {
                         Icon(
-                            imageVector = Icons.Default.ArrowBack,
+                            imageVector = Icons.Filled.ArrowBack,
                             contentDescription = "Back",
                             tint = Color.White
                         )
@@ -114,7 +127,7 @@ data class NowPlayingScreen(val song: Song) : Screen {
                     
                     IconButton(onClick = { /* 更多选项 */ }) {
                         Icon(
-                            imageVector = Icons.Default.MoreVert,
+                            imageVector = Icons.Filled.MoreVert,
                             contentDescription = "More",
                             tint = Color.White
                         )
@@ -224,11 +237,10 @@ data class NowPlayingScreen(val song: Song) : Screen {
                         onClick = { /* 上一首 */ },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipPrevious,
-                            contentDescription = "Previous",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
+                        Text(
+                            text = "⏮",
+                            color = Color.White,
+                            fontSize = 24.sp
                         )
                     }
                     
@@ -244,11 +256,10 @@ data class NowPlayingScreen(val song: Song) : Screen {
                             containerColor = Color(0xFF00D4FF).copy(alpha = 0.9f)
                         )
                     ) {
-                        Icon(
-                            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
-                            tint = Color.Black,
-                            modifier = Modifier.size(36.dp)
+                        Text(
+                            text = if (isPlaying) "⏸" else "▶",
+                            color = Color.Black,
+                            fontSize = 28.sp
                         )
                     }
                     
@@ -257,11 +268,10 @@ data class NowPlayingScreen(val song: Song) : Screen {
                         onClick = { /* 下一首 */ },
                         modifier = Modifier.size(48.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.SkipNext,
-                            contentDescription = "Next",
-                            tint = Color.White,
-                            modifier = Modifier.size(32.dp)
+                        Text(
+                            text = "⏭",
+                            color = Color.White,
+                            fontSize = 24.sp
                         )
                     }
                 }

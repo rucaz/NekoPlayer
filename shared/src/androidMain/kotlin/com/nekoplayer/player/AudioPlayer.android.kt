@@ -75,7 +75,7 @@ actual class AudioPlayer : KoinComponent {
                     }
                 }
                 
-                override fun onPlayerError(error: Player.PlayerError) {
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
                     _playerState.value = PlayerState.Error(error.message ?: "播放错误")
                 }
             })
