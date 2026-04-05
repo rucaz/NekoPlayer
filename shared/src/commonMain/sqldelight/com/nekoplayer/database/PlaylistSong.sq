@@ -1,0 +1,61 @@
+-- 歌单歌曲关联表（支持一首歌在多个歌单）
+CREATE TABLE PlaylistSong (
+    id TEXT PRIMARY KEY,
+    playlistId TEXT NOT NULL,
+    songId TEXT NOT NULL,
+    songJson TEXT NOT NULL,  -- Song对象的JSON序列化
+    addedAt INTEGER NOT NULL,
+    "order" INTEGER NOT NULL DEFAULT 0,  -- 排序索引
+    FOREIGN KEY (playlistId) REFERENCES Playlist(id) ON DELETE CASCADE
+);
+
+-- 创建索引加速查询
+CREATE INDEX idx_playlistSong_playlist ON PlaylistSong(playlistId);
+CREATE INDEX idx_playlistSong_song ON PlaylistSong(songId);
+
+-- 获取歌单内所有歌曲（按排序索引）
+getSongsByPlaylist:
+SELECT * FROM PlaylistSong
+WHERE playlistId = ?
+ORDER BY "order" ASC, addedAt DESC;
+
+-- 获取歌单内歌曲数量
+getSongCountByPlaylist:
+SELECT COUNT(*) FROM PlaylistSong
+WHERE playlistId = ?;
+
+-- 检查歌曲是否已在歌单中
+isSongInPlaylist:
+SELECT COUNT(*) FROM PlaylistSong
+WHERE playlistId = ? AND songId = ?;
+
+-- 插入歌曲到歌单
+insert:
+INSERT INTO PlaylistSong(id, playlistId, songId, songJson, addedAt, "order")
+VALUES (?, ?, ?, ?, ?, ?);
+
+-- 从歌单删除歌曲
+delete:
+DELETE FROM PlaylistSong
+WHERE id = ?;
+
+-- 根据 playlistId + songId 删除
+deleteByPlaylistAndSong:
+DELETE FROM PlaylistSong
+WHERE playlistId = ? AND songId = ?;
+
+-- 清空歌单所有歌曲
+deleteAllByPlaylist:
+DELETE FROM PlaylistSong
+WHERE playlistId = ?;
+
+-- 更新歌曲排序
+updateOrder:
+UPDATE PlaylistSong
+SET "order" = ?
+WHERE id = ?;
+
+-- 获取歌单内最大排序值（用于新歌曲插入）
+getMaxOrder:
+SELECT MAX("order") FROM PlaylistSong
+WHERE playlistId = ?;

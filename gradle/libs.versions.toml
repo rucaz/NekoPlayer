@@ -15,6 +15,7 @@ coil = "3.0.0-alpha03"
 multiplatform-settings = "1.1.1"
 koin = "3.5.0"
 koin-compose = "1.1.0"
+sqldelight = "2.0.1"
 
 [libraries]
 # Compose
@@ -66,6 +67,12 @@ koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
 koin-android = { module = "io.insert-koin:koin-android", version.ref = "koin" }
 koin-compose = { module = "io.insert-koin:koin-compose", version.ref = "koin-compose" }
 
+# SQLDelight
+sqldelight-runtime = { module = "app.cash.sqldelight:runtime", version.ref = "sqldelight" }
+sqldelight-android-driver = { module = "app.cash.sqldelight:android-driver", version.ref = "sqldelight" }
+sqldelight-native-driver = { module = "app.cash.sqldelight:native-driver", version.ref = "sqldelight" }
+sqldelight-coroutines = { module = "app.cash.sqldelight:coroutines-extensions", version.ref = "sqldelight" }
+
 [bundles]
 ktor-common = ["ktor-client-core", "ktor-client-content-negotiation", "ktor-client-logging", "ktor-client-encoding", "ktor-serialization-json"]
 compose-common = ["compose-runtime", "compose-foundation", "compose-material", "compose-material3", "compose-ui"]
@@ -77,3 +84,4 @@ kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "compose" }
 kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

@@ -1,0 +1,40 @@
+-- 歌单表
+CREATE TABLE Playlist (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    coverUrl TEXT,
+    createdAt INTEGER NOT NULL,
+    updatedAt INTEGER NOT NULL
+);
+
+-- 获取所有歌单（按更新时间倒序）
+getAll:
+SELECT * FROM Playlist
+ORDER BY updatedAt DESC;
+
+-- 根据ID获取歌单
+getById:
+SELECT * FROM Playlist
+WHERE id = ?;
+
+-- 插入歌单
+insert:
+INSERT INTO Playlist(id, name, coverUrl, createdAt, updatedAt)
+VALUES (?, ?, ?, ?, ?);
+
+-- 更新歌单
+update:
+UPDATE Playlist
+SET name = ?, coverUrl = ?, updatedAt = ?
+WHERE id = ?;
+
+-- 删除歌单
+delete:
+DELETE FROM Playlist
+WHERE id = ?;
+
+-- 更新歌单封面
+updateCover:
+UPDATE Playlist
+SET coverUrl = ?, updatedAt = ?
+WHERE id = ?;

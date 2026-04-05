@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.kotlinxSerialization)
+    alias(libs.plugins.sqldelight)
 }
 
 kotlin {
@@ -48,6 +49,10 @@ kotlin {
                 
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
+                
+                // SQLDelight
+                implementation(libs.sqldelight.runtime)
+                implementation(libs.sqldelight.coroutines)
             }
         }
         
@@ -57,6 +62,7 @@ kotlin {
                 implementation(libs.androidx.activity.compose)
                 implementation(libs.androidx.media3.exoplayer)
                 implementation(libs.androidx.media3.session)
+                implementation(libs.sqldelight.android.driver)
             }
         }
         
@@ -71,6 +77,7 @@ kotlin {
             iosSimulatorArm64Main.dependsOn(this)
             dependencies {
                 implementation(libs.ktor.client.darwin)
+                implementation(libs.sqldelight.native.driver)
             }
         }
     }
@@ -96,5 +103,13 @@ android {
     
     composeOptions {
         kotlinCompilerExtensionVersion = libs.versions.compose.compiler.get()
+    }
+}
+
+sqldelight {
+    databases {
+        create("NekoDatabase") {
+            packageName.set("com.nekoplayer.database")
+        }
     }
 }
