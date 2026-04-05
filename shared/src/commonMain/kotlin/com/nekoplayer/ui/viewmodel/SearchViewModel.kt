@@ -44,10 +44,11 @@ class SearchViewModel(
             _errorMessage.value = null
             
             try {
-                val results = bilibiliApi.search(query)
+                // 使用模糊搜索
+                val results = bilibiliApi.fuzzySearch(query)
                 _searchResults.value = results
                 if (results.isEmpty()) {
-                    _errorMessage.value = "未找到相关歌曲"
+                    _errorMessage.value = "未找到相关歌曲，换个关键词试试"
                 }
             } catch (e: Exception) {
                 _errorMessage.value = "搜索失败: ${e.message}"

@@ -39,14 +39,20 @@ class BilibiliApi(engine: HttpClientEngine) {
     }
     
     /**
-     * 搜索音乐
+     * 搜索音乐（支持模糊搜索）
+     * 当关键词较短时，会尝试获取更多信息以便客户端过滤
      */
     suspend fun search(keyword: String, page: Int = 1, pageSize: Int = 20): List<Song> {
+        // 使用更宽松的搜索参数
         val response = client.get("https://api.bilibili.com/x/web-interface/search/type") {
             parameter("keyword", keyword)
             parameter("search_type", "video")
             parameter("page", page)
             parameter("page_size", pageSize)
+            // 启用高亮关键词，帮助确认匹配度
+            parameter("highlight", "1")
+            // 按综合排序，确保相关结果在前
+            parameter("order", "totalrank")
         }
         
         val result = response.body<BiliSearchResponse>()
@@ -63,6 +69,55 @@ class BilibiliApi(engine: HttpClientEngine) {
                 playUrl = null // 需要单独获取
             )
         } ?: emptyList()
+    }
+    
+    /**
+     * 模糊搜索 - 尝试多种关键词变体并合并结果
+     */
+    suspend fun fuzzySearch(keyword: String): List<Song> {
+        // 主搜索
+        val mainResults = search(keyword)
+        
+        // 如果结果太少，尝试关键词变体
+        if (mainResults.size < 5 && keyword.length > 2) {
+            // 尝试去掉特殊字符的搜索
+            val cleanedKeyword = keyword.replace(Regex("[^\u4e00-\u9fa5a-zA-Z0-9]"), " ")
+            if (cleanedKeyword != keyword && cleanedKeyword.isNotBlank()) {
+                val extraResults = search(cleanedKeyword)
+                // 合并结果，去重
+                return (mainResults + extraResults)
+                    .distinctBy { it.id }
+                    .sortedByDescending { 
+                        // 按标题匹配度排序
+                        calculateRelevance(it.title, keyword)
+                    }
+            }
+        }
+        
+        return mainResults.sortedByDescending { 
+            calculateRelevance(it.title, keyword)
+        }
+    }
+    
+    /**
+     * 计算搜索结果与关键词的相关性分数
+     */
+    private fun calculateRelevance(title: String, keyword: String): Int {
+        val lowerTitle = title.lowercase()
+        val lowerKeyword = keyword.lowercase()
+        
+        return when {
+            // 完全匹配分数最高
+            lowerTitle == lowerKeyword -> 100
+            // 开头匹配
+            lowerTitle.startsWith(lowerKeyword) -> 80
+            // 包含完整关键词
+            lowerTitle.contains(lowerKeyword) -> 60
+            // 包含关键词的每个字/词（模糊匹配）
+            lowerKeyword.split("").all { it.isBlank() || lowerTitle.contains(it) } -> 40
+            // 部分匹配
+            else -> lowerKeyword.split(" ").count { lowerTitle.contains(it) } * 20
+        }
     }
     
     /**
