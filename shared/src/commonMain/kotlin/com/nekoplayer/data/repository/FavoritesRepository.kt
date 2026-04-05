@@ -76,7 +76,8 @@ class FavoritesRepository(private val database: NekoDatabase) {
             false
         } else {
             // 添加收藏
-            val maxOrder: Long = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull() ?: 0L
+            val maxOrderResult = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull()
+            val maxOrder = maxOrderResult?.toString()?.toLongOrNull() ?: 0L
             database.playlistSongQueries.insert(
                 id = generateId(),
                 playlistId = playlistId,
