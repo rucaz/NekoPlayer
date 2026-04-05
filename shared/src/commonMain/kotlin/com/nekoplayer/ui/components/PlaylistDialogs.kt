@@ -112,17 +112,15 @@ fun AddToPlaylistDialog(
                 ) {
                     items(playlists, key = { it.id }) { playlist ->
                         var isAlreadyInPlaylist by remember { mutableStateOf(false) }
-                        var checkError by remember { mutableStateOf(false) }
 
                         // 检查歌曲是否已在歌单中
                         LaunchedEffect(playlist.id, song.id) {
                             try {
                                 isAlreadyInPlaylist = playlistRepository.isSongInPlaylist(playlist.id, song.id)
-                                checkError = false
                             } catch (e: Exception) {
-                                // 数据库查询失败，默认设为false
+                                // 数据库查询失败，默认设为false，允许用户尝试添加
                                 isAlreadyInPlaylist = false
-                                checkError = true
+                                e.printStackTrace()
                             }
                         }
 
@@ -133,7 +131,7 @@ fun AddToPlaylistDialog(
                             isAlreadyAdded = isAlreadyInPlaylist,
                             isAdding = isAdding,
                             onClick = {
-                                if (!isAlreadyInPlaylist && !isAdding && !checkError) {
+                                if (!isAlreadyInPlaylist && !isAdding) {
                                     addingPlaylistId = playlist.id
                                     scope.launch {
                                         try {
