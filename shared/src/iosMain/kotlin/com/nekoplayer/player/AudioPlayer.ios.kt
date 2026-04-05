@@ -31,10 +31,14 @@ actual class AudioPlayer {
     
     private var currentSong: Song? = null
     private var timeObserver: Any? = null
+    private var queueManager: QueueManager? = null
+    private var didPlayToEndObserver: Any? = null
     
     actual fun prepare(song: Song) {
         currentSong = song
         _playerState.value = PlayerState.Loading
+        
+        release()
         
         song.playUrl?.let { urlString ->
             val url = NSURL(string = urlString)
@@ -58,6 +62,18 @@ actual class AudioPlayer {
                 usingBlock = { time ->
                     val seconds = CMTimeGetSeconds(time)
                     _currentPosition.value = (seconds * 1000).toLong()
+                }
+            )
+            
+            // 监听播放结束
+            val notificationCenter = platform.Foundation.NSNotificationCenter.defaultCenter
+            didPlayToEndObserver = notificationCenter.addObserverForName(
+                AVPlayerItemDidPlayToEndTimeNotification,
+                `object` = playerItem,
+                queue = null,
+                usingBlock = { _ ->
+                    // 播放结束，自动播放下一首
+                    playNext()
                 }
             )
         }
@@ -95,7 +111,40 @@ actual class AudioPlayer {
         timeObserver?.let { observer ->
             avPlayer?.removeTimeObserver(observer)
         }
+        didPlayToEndObserver?.let { observer ->
+            val notificationCenter = platform.Foundation.NSNotificationCenter.defaultCenter
+            notificationCenter.removeObserver(observer)
+        }
         avPlayer = null
+    }
+    
+    /**
+     * 播放下一首
+     */
+    actual fun playNext() {
+        queueManager?.playNext()?.let { nextSong ->
+            prepare(nextSong)
+            play()
+        } ?: run {
+            stop()
+        }
+    }
+    
+    /**
+     * 播放上一首
+     */
+    actual fun playPrevious() {
+        queueManager?.playPrevious()?.let { prevSong ->
+            prepare(prevSong)
+            play()
+        }
+    }
+    
+    /**
+     * 设置队列管理器
+     */
+    actual fun setQueueManager(queueManager: QueueManager) {
+        this.queueManager = queueManager
     }
     
     // KVO回调（简化版，实际需要完整实现）
@@ -109,6 +158,11 @@ actual class AudioPlayer {
             val playerItem = ofObject as? AVPlayerItem
             when (playerItem?.status) {
                 AVPlayerItemStatusReadyToPlay -> {
+                    // 获取时长
+                    val duration = CMTimeGetSeconds(playerItem.duration)
+                    if (duration > 0) {
+                        _duration.value = (duration * 1000).toLong()
+                    }
                     currentSong?.let { _playerState.value = PlayerState.Playing(it) }
                 }
                 AVPlayerItemStatusFailed -> {

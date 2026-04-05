@@ -63,6 +63,21 @@ expect class AudioPlayer() {
      * 释放资源
      */
     fun release()
+    
+    /**
+     * 播放下一首（需要设置QueueManager后可用）
+     */
+    fun playNext()
+    
+    /**
+     * 播放上一首（需要设置QueueManager后可用）
+     */
+    fun playPrevious()
+    
+    /**
+     * 设置队列管理器
+     */
+    fun setQueueManager(queueManager: QueueManager)
 }
 
 /**

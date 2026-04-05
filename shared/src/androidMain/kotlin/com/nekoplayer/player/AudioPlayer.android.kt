@@ -38,6 +38,7 @@ actual class AudioPlayer : KoinComponent {
     actual val waveformData: StateFlow<List<Float>> = _waveformData.asStateFlow()
     
     private var currentSong: Song? = null
+    private var queueManager: QueueManager? = null
     
     // 位置更新任务
     private val positionUpdateRunnable = object : Runnable {
@@ -75,8 +76,8 @@ actual class AudioPlayer : KoinComponent {
                             startPositionUpdates()
                         }
                         Player.STATE_ENDED -> {
-                            _playerState.value = PlayerState.Idle
-                            stopPositionUpdates()
+                            // 自动播放下一首
+                            playNext()
                         }
                         Player.STATE_BUFFERING -> {
                             _playerState.value = PlayerState.Loading
@@ -138,6 +139,36 @@ actual class AudioPlayer : KoinComponent {
         
         exoPlayer?.release()
         exoPlayer = null
+    }
+    
+    /**
+     * 播放下一首
+     */
+    actual fun playNext() {
+        queueManager?.playNext()?.let { nextSong ->
+            prepare(nextSong)
+            play()
+        } ?: run {
+            // 没有下一首，停止播放
+            stop()
+        }
+    }
+    
+    /**
+     * 播放上一首
+     */
+    actual fun playPrevious() {
+        queueManager?.playPrevious()?.let { prevSong ->
+            prepare(prevSong)
+            play()
+        }
+    }
+    
+    /**
+     * 设置队列管理器
+     */
+    actual fun setQueueManager(queueManager: QueueManager) {
+        this.queueManager = queueManager
     }
     
     private fun startPositionUpdates() {
