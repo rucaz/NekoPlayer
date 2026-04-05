@@ -9,6 +9,17 @@ import app.cash.sqldelight.driver.android.AndroidSqliteDriver
  */
 actual class DriverFactory(private val context: Context) {
     actual fun createDriver(): SqlDriver {
-        return AndroidSqliteDriver(NekoDatabase.Schema, context, "nekoplayer.db")
+        return AndroidSqliteDriver(
+            schema = NekoDatabase.Schema,
+            context = context,
+            name = "nekoplayer.db",
+            callback = object : AndroidSqliteDriver.Callback(NekoDatabase.Schema) {
+                override fun onOpen(db: android.database.sqlite.SQLiteDatabase) {
+                    super.onOpen(db)
+                    // 启用外键约束，确保删除歌单时关联歌曲被级联删除
+                    db.setForeignKeyConstraintsEnabled(true)
+                }
+            }
+        )
     }
 }
