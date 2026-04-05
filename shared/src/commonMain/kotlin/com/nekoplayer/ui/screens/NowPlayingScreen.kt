@@ -141,6 +141,24 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                         )
 
                         Row {
+                            // 添加到歌单按钮
+                            var showAddToPlaylist by remember { mutableStateOf(false) }
+                            
+                            GlassButton(
+                                onClick = { showAddToPlaylist = true },
+                                icon = Icons.Default.Add,
+                                contentDescription = "添加到歌单"
+                            )
+                            
+                            if (showAddToPlaylist) {
+                                com.nekoplayer.ui.components.AddToPlaylistDialog(
+                                    song = song,
+                                    onDismiss = { showAddToPlaylist = false }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
                             GlassButton(
                                 onClick = { navigator.push(NowPlayingQueueScreen()) },
                                 icon = Icons.Default.List,

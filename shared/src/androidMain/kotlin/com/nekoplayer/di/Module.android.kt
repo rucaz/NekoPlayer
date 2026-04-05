@@ -40,7 +40,7 @@ val androidModule = module {
     single { MiguApi(get()) }
     
     // ViewModel - 使用single让搜索状态在页面间保持
-    single { SearchViewModel(get()) }
+    single { SearchViewModel(get(), get()) }
     
     // Player - 使用single确保全局唯一实例
     single { AudioPlayer() }

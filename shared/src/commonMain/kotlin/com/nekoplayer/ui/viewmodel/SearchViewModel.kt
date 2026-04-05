@@ -3,7 +3,9 @@ package com.nekoplayer.ui.viewmodel
 import cafe.adriel.voyager.core.model.ScreenModel
 import cafe.adriel.voyager.core.model.screenModelScope
 import com.nekoplayer.data.api.BilibiliApi
+import com.nekoplayer.data.api.MiguApi
 import com.nekoplayer.data.model.Song
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -11,9 +13,11 @@ import kotlinx.coroutines.launch
 
 /**
  * 搜索界面ViewModel
+ * 同时搜索 Bilibili 和 Migu 两个源
  */
 class SearchViewModel(
-    private val bilibiliApi: BilibiliApi
+    private val bilibiliApi: BilibiliApi,
+    private val miguApi: MiguApi
 ) : ScreenModel {
     
     private val _searchQuery = MutableStateFlow("")
@@ -44,10 +48,24 @@ class SearchViewModel(
             _errorMessage.value = null
             
             try {
-                // 使用模糊搜索
-                val results = bilibiliApi.fuzzySearch(query)
-                _searchResults.value = results
-                if (results.isEmpty()) {
+                // 同时搜索两个源
+                val bilibiliDeferred = async { 
+                    try { bilibiliApi.fuzzySearch(query) } catch (e: Exception) { emptyList() }
+                }
+                val miguDeferred = async { 
+                    try { miguApi.search(query) } catch (e: Exception) { emptyList() }
+                }
+                
+                val bilibiliResults = bilibiliDeferred.await()
+                val miguResults = miguDeferred.await()
+                
+                // 合并结果：Bilibili 在前，Migu 在后，各限制20条避免过多
+                val combinedResults = (bilibiliResults.take(20) + miguResults.take(20))
+                    .distinctBy { it.id } // 去重
+                
+                _searchResults.value = combinedResults
+                
+                if (combinedResults.isEmpty()) {
                     _errorMessage.value = "未找到相关歌曲，换个关键词试试"
                 }
             } catch (e: Exception) {
@@ -67,7 +85,11 @@ class SearchViewModel(
         _isLoadingPlayUrl.value = true
         
         return try {
-            val playUrl = bilibiliApi.getPlayUrl(song.sourceId)
+            val playUrl = when (song.source) {
+                com.nekoplayer.data.model.MusicSource.MIGU -> miguApi.getPlayUrl(song.sourceId)
+                else -> bilibiliApi.getPlayUrl(song.sourceId)
+            }
+            
             if (playUrl != null) {
                 song.copy(playUrl = playUrl)
             } else {

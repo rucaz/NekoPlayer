@@ -103,7 +103,7 @@ class QueueManager {
 
     /**
      * 播放下一首
-     * @return 下一首歌曲，如果队列结束返回 null
+     * @return 下一首歌曲，如果队列结束则循环到第一首
      */
     fun playNext(): Song? {
         val queue = _currentQueue.value
@@ -123,8 +123,13 @@ class QueueManager {
             shuffleHistory.add(nextIndex)
             song
         } else {
-            // 队列结束，返回 null（可以触发自动停止或循环）
-            null
+            // 队列结束，循环到第一首（顺序和随机模式都循环）
+            _currentIndex.value = 0
+            val song = queue[0]
+            _currentSong.value = song
+            shuffleHistory.clear()
+            shuffleHistory.add(0)
+            song
         }
     }
 
