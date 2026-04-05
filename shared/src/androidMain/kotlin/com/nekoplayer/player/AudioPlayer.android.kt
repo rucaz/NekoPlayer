@@ -112,7 +112,19 @@ actual class AudioPlayer {
     }
     
     actual fun play() {
-        exoPlayer?.play()
+        // 如果播放器不存在或已停止/结束，需要先准备当前歌曲
+        if (exoPlayer == null || currentSong == null) {
+            return
+        }
+        
+        // 检查播放器是否需要重新 prepare
+        val currentState = exoPlayer?.playbackState
+        if (currentState == Player.STATE_IDLE || currentState == Player.STATE_ENDED) {
+            // 需要重新准备
+            currentSong?.let { prepare(it) }
+        } else {
+            exoPlayer?.play()
+        }
     }
     
     actual fun pause() {
@@ -126,7 +138,21 @@ actual class AudioPlayer {
     }
     
     actual fun seekTo(position: Long) {
-        exoPlayer?.seekTo(position)
+        // 如果播放器不存在或已停止，需要先准备
+        if (exoPlayer == null || currentSong == null) {
+            return
+        }
+        
+        val currentState = exoPlayer?.playbackState
+        if (currentState == Player.STATE_IDLE || currentState == Player.STATE_ENDED) {
+            // 重新准备并设置位置
+            currentSong?.let { 
+                prepare(it)
+                exoPlayer?.seekTo(position)
+            }
+        } else {
+            exoPlayer?.seekTo(position)
+        }
         _currentPosition.value = position
     }
     
