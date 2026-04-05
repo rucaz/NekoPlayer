@@ -76,14 +76,14 @@ class FavoritesRepository(private val database: NekoDatabase) {
             false
         } else {
             // 添加收藏
-            val maxOrder = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull() ?: 0L
+            val maxOrder: Long = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull() ?: 0L
             database.playlistSongQueries.insert(
                 id = generateId(),
                 playlistId = playlistId,
                 songId = song.id,
                 songJson = json.encodeToString(song),
                 addedAt = currentTimeMillis(),
-                order = maxOrder + 1
+                order = maxOrder + 1L
             )
             // 更新歌单时间
             val playlist = database.playlistQueries.getById(playlistId).executeAsOne()
