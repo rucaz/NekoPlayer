@@ -144,7 +144,8 @@ fun AddToPlaylistDialog(
                                             }
                                         } catch (e: Exception) {
                                             addingPlaylistId = null
-                                            // 添加失败
+                                            // 添加失败，打印错误
+                                            e.printStackTrace()
                                         }
                                     }
                                 }

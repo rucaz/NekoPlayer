@@ -55,8 +55,11 @@ fun MiniPlayer(
     // 只有在有歌曲时才显示
     val isVisible = currentSong != null
 
+    // 检查当前是否已经在播放页
+    val isOnNowPlayingScreen = navigator.lastItem is NowPlayingScreen
+
     AnimatedVisibility(
-        visible = isVisible,
+        visible = isVisible && !isOnNowPlayingScreen,
         enter = slideInVertically { it },
         exit = slideOutVertically { it },
         modifier = modifier
