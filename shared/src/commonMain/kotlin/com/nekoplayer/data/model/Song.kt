@@ -13,7 +13,11 @@ data class Song(
     val source: MusicSource,
     val sourceId: String, // 原始平台ID
     val playUrl: String? = null,
-    val lyric: String? = null
+    val lyric: String? = null,
+    // 热度/质量评分（用于排序，越高越靠前）
+    val popularityScore: Int = 0,
+    // 是否标记为原唱/官方
+    val isOfficial: Boolean = false
 )
 
 enum class MusicSource {

@@ -39,24 +39,27 @@ class BilibiliApi(engine: HttpClientEngine) {
     }
     
     /**
-     * 搜索音乐（支持模糊搜索）
-     * 当关键词较短时，会尝试获取更多信息以便客户端过滤
+     * 搜索音乐（优化排序，优先原唱/官方）
      */
     suspend fun search(keyword: String, page: Int = 1, pageSize: Int = 20): List<Song> {
-        // 使用更宽松的搜索参数
+        // 使用收藏数排序，更可能优先高质量原唱
         val response = client.get("https://api.bilibili.com/x/web-interface/search/type") {
             parameter("keyword", keyword)
             parameter("search_type", "video")
             parameter("page", page)
             parameter("page_size", pageSize)
-            // 启用高亮关键词，帮助确认匹配度
             parameter("highlight", "1")
-            // 按综合排序，确保相关结果在前
-            parameter("order", "totalrank")
+            // 按收藏数排序，更容易找到原唱/高质量内容
+            parameter("order", "stow")
         }
         
         val result = response.body<BiliSearchResponse>()
         return result.data?.result?.map { video ->
+            // 计算热度评分 (收藏*3 + 弹幕*2 + 播放/100)
+            val popularityScore = (video.favorites * 3) + 
+                                  (video.danmaku * 2) + 
+                                  (video.play / 100).toInt()
+            
             Song(
                 id = "bili_${video.bvid}",
                 title = video.title.replace("<em class=\"keyword\">", "").replace("</em>", ""),
@@ -66,37 +69,68 @@ class BilibiliApi(engine: HttpClientEngine) {
                 duration = parseDurationToMillis(video.duration),
                 source = com.nekoplayer.data.model.MusicSource.BILIBILI,
                 sourceId = video.bvid,
-                playUrl = null // 需要单独获取
+                playUrl = null,
+                popularityScore = popularityScore,
+                isOfficial = isOfficialContent(video.title)
             )
         } ?: emptyList()
     }
     
     /**
-     * 模糊搜索 - 尝试多种关键词变体并合并结果
+     * 模糊搜索 - 智能排序
      */
     suspend fun fuzzySearch(keyword: String): List<Song> {
-        // 主搜索
+        // 主搜索（按收藏数）
         val mainResults = search(keyword)
         
-        // 如果结果太少，尝试关键词变体
-        if (mainResults.size < 5 && keyword.length > 2) {
-            // 尝试去掉特殊字符的搜索
+        // 补充搜索：尝试原始关键词变体
+        val allResults = if (mainResults.size < 10 && keyword.length > 2) {
             val cleanedKeyword = keyword.replace(Regex("[^\u4e00-\u9fa5a-zA-Z0-9]"), " ")
             if (cleanedKeyword != keyword && cleanedKeyword.isNotBlank()) {
-                val extraResults = search(cleanedKeyword)
-                // 合并结果，去重
-                return (mainResults + extraResults)
-                    .distinctBy { it.id }
-                    .sortedByDescending { 
-                        // 按标题匹配度排序
-                        calculateRelevance(it.title, keyword)
-                    }
-            }
-        }
+                mainResults + search(cleanedKeyword)
+            } else mainResults
+        } else mainResults
         
-        return mainResults.sortedByDescending { 
-            calculateRelevance(it.title, keyword)
-        }
+        // 去重并智能排序
+        return allResults
+            .distinctBy { it.id }
+            .sortedWith(compareByDescending<Song> { song ->
+                // 1. 标题匹配度（最高优先级）
+                calculateRelevance(song.title, keyword)
+            }.thenByDescending { song ->
+                // 2. 官方/原唱标记
+                if (song.isOfficial) 1000 else 0
+            }.thenByDescending { song ->
+                // 3. 排除翻唱/低质量内容
+                if (isLowQualityContent(song.title)) -500 else 0
+            }.thenByDescending { song ->
+                // 4. 热度评分
+                song.popularityScore
+            })
+    }
+    
+    /**
+     * 判断是否为官方/原唱内容
+     */
+    private fun isOfficialContent(title: String): Boolean {
+        val lowerTitle = title.lowercase()
+        val officialKeywords = listOf(
+            "原唱", "原版", "官方", "official", "mv", "music video",
+            "完整版", "full version", "本家", "原创"
+        )
+        return officialKeywords.any { lowerTitle.contains(it) }
+    }
+    
+    /**
+     * 判断是否为低质量/翻唱内容（需要降级）
+     */
+    private fun isLowQualityContent(title: String): Boolean {
+        val lowerTitle = title.lowercase()
+        val lowQualityKeywords = listOf(
+            "翻唱", "cover", "二创", "手书", "mmd", "鬼畜", "搞笑",
+            " reaction", "反应", "吐槽", "解说", "剪辑", "盘点"
+        )
+        return lowQualityKeywords.any { lowerTitle.contains(it) }
     }
     
     /**
@@ -195,7 +229,10 @@ data class BiliVideoItem(
     val title: String,
     val author: String,
     val pic: String,
-    val duration: String
+    val duration: String,
+    val favorites: Int = 0,    // 收藏数
+    val danmaku: Int = 0,      // 弹幕数
+    val play: Int = 0          // 播放量
 )
 
 @Serializable
