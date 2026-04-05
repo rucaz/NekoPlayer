@@ -57,5 +57,5 @@ WHERE id = ?;
 
 -- 获取歌单内最大排序值（用于新歌曲插入）
 getMaxOrder:
-SELECT MAX("order") FROM PlaylistSong
+SELECT COALESCE(MAX("order"), 0) AS maxOrder FROM PlaylistSong
 WHERE playlistId = ?;

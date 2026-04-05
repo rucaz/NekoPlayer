@@ -208,8 +208,8 @@ private fun PlaylistHeader(
                     .size(120.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(
-                        if (playlist.coverUrl != null) {
-                            Color.Transparent
+                        brush = if (playlist.coverUrl != null) {
+                            Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
                         } else {
                             Brush.linearGradient(
                                 colors = listOf(
