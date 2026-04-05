@@ -50,6 +50,7 @@ fun AddToPlaylistDialog(
     var showCreateNew by remember { mutableStateOf(false) }
     var addingPlaylistId by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var debugInfo by remember { mutableStateOf("等待点击...") }
 
     LaunchedEffect(playlists) {
         println("[$TAG] Loaded ${playlists.size} playlists")
@@ -74,6 +75,14 @@ fun AddToPlaylistDialog(
                     color = Color.White,
                     fontSize = 18.sp,
                     modifier = Modifier.padding(16.dp)
+                )
+
+                // 调试信息（临时）
+                Text(
+                    text = "DEBUG: $debugInfo",
+                    color = Color.Yellow,
+                    fontSize = 10.sp,
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
 
                 // 错误消息
@@ -166,31 +175,37 @@ fun AddToPlaylistDialog(
                             isAlreadyAdded = isAlreadyInPlaylist,
                             isAdding = isAdding,
                             onClick = {
+                                debugInfo = "点击: ${playlist.name}, 检查中..."
                                 println("[$TAG] Clicked on playlist: ${playlist.id} - ${playlist.name}")
                                 println("[$TAG] isAlreadyInPlaylist=$isAlreadyInPlaylist, isAdding=$isAdding")
                                 if (!isAlreadyInPlaylist && !isAdding) {
                                     addingPlaylistId = playlist.id
                                     scope.launch {
                                         try {
+                                            debugInfo = "正在添加..."
                                             println("[$TAG] Calling addSongToPlaylist...")
                                             val success = playlistRepository.addSongToPlaylist(playlist.id, song)
                                             println("[$TAG] addSongToPlaylist returned: $success")
                                             addingPlaylistId = null
                                             if (success) {
+                                                debugInfo = "添加成功!"
                                                 println("[$TAG] Success! Dismissing dialog")
                                                 onDismiss()
                                             } else {
+                                                debugInfo = "返回false，检查歌曲是否存在"
                                                 println("[$TAG] Failed to add song")
                                                 errorMessage = "添加失败，歌曲可能已存在"
                                             }
                                         } catch (e: Exception) {
                                             addingPlaylistId = null
+                                            debugInfo = "异常: ${e.message?.take(30)}"
                                             println("[$TAG] EXCEPTION: ${e.message}")
                                             e.printStackTrace()
                                             errorMessage = "添加失败: ${e.message}"
                                         }
                                     }
                                 } else {
+                                    debugInfo = "被忽略: 已存在=$isAlreadyInPlaylist, 添加中=$isAdding"
                                     println("[$TAG] Click ignored: isAlreadyInPlaylist=$isAlreadyInPlaylist, isAdding=$isAdding")
                                 }
                             }
