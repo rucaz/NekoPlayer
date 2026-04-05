@@ -71,9 +71,20 @@ fun AddToPlaylistDialog(
                     CreatePlaylistInline(
                         onCreate = { name ->
                             scope.launch {
-                                val playlistId = playlistRepository.createPlaylist(name)
-                                // 创建后隐藏输入框，让用户看到新歌单并选择
-                                showCreateNew = false
+                                try {
+                                    val playlistId = playlistRepository.createPlaylist(name)
+                                    // 创建后自动添加歌曲到新歌单
+                                    val success = playlistRepository.addSongToPlaylist(playlistId, song)
+                                    if (success) {
+                                        onDismiss()
+                                    } else {
+                                        // 添加失败（可能已存在），但仍关闭
+                                        onDismiss()
+                                    }
+                                } catch (e: Exception) {
+                                    e.printStackTrace()
+                                    onDismiss()
+                                }
                             }
                         },
                         onCancel = { showCreateNew = false }

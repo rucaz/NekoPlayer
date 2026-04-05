@@ -63,13 +63,13 @@ class PlaylistListScreen : Screen {
                     // 空状态
                     EmptyState(onCreateClick = { showCreateDialog = true })
                 } else {
-                    // 歌单网格
+                    // 歌单网格 - 横屏优化：更小的卡片
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Adaptive(minSize = 100.dp),
                         modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(playlists, key = { it.id }) { playlist ->
                             PlaylistCard(
@@ -192,15 +192,15 @@ private fun PlaylistCard(
 ) {
     Column(
         modifier = Modifier
-            .fillMaxWidth()
+            .width(100.dp)
             .clickable(onClick = onClick)
     ) {
-        // 封面区域
+        // 封面区域 - 缩小到 1/5 大小
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(RoundedCornerShape(12.dp))
+                .width(100.dp)
+                .height(100.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(
                     brush = if (playlist.coverUrl != null) {
                         Brush.linearGradient(colors = listOf(Color.Transparent, Color.Transparent))
@@ -220,20 +220,19 @@ private fun PlaylistCard(
                     contentDescription = null,
                     tint = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier
-                        .size(48.dp)
+                        .size(32.dp)
                         .align(Alignment.Center)
                 )
             }
-            // TODO: 加载封面图片
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(4.dp))
 
         // 歌单名称
         Text(
             text = playlist.name,
             color = Color.White,
-            fontSize = 14.sp,
+            fontSize = 12.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
@@ -242,7 +241,7 @@ private fun PlaylistCard(
         Text(
             text = formatDate(playlist.updatedAt),
             color = Color.White.copy(alpha = 0.5f),
-            fontSize = 12.sp
+            fontSize = 10.sp
         )
     }
 }

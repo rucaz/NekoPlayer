@@ -30,6 +30,7 @@ val androidModule = module {
     // Repository
     single { UserRepository(get()) }
     single { PlaylistRepository(get()) }
+    single { PlaybackRepository(get()) }
     
     // HTTP Engine
     single<HttpClientEngine> { OkHttp.create() }

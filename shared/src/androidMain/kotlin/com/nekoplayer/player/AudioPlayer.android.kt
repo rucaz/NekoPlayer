@@ -50,6 +50,33 @@ actual class AudioPlayer {
         }
     }
     
+    /**
+     * 处理播放结束
+     */
+    private fun handlePlaybackEnded() {
+        val queueManager = this.queueManager
+        val currentSong = this.currentSong
+        
+        if (queueManager != null && currentSong != null) {
+            val playMode = queueManager.playMode.value
+            
+            when (playMode) {
+                QueueManager.PlayMode.REPEAT_ONE -> {
+                    // 单曲循环：从头开始重新播放当前歌曲
+                    exoPlayer?.seekTo(0)
+                    exoPlayer?.play()
+                }
+                else -> {
+                    // 其他模式：播放下一首
+                    playNext()
+                }
+            }
+        } else {
+            // 没有队列管理器，直接停止
+            stop()
+        }
+    }
+    
     actual fun prepare(song: Song) {
         // 如果正在播放同一首歌且播放器实例存在，不重新准备
         if (currentSong?.id == song.id && exoPlayer != null) {
@@ -82,7 +109,7 @@ actual class AudioPlayer {
                         }
                         Player.STATE_ENDED -> {
                             // 自动播放下一首
-                            playNext()
+                            handlePlaybackEnded()
                         }
                         Player.STATE_BUFFERING -> {
                             _playerState.value = PlayerState.Loading

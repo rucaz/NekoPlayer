@@ -9,14 +9,19 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
+import com.nekoplayer.data.repository.PlaybackRepository
+import com.nekoplayer.data.repository.PlaybackStateSaver
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.QueueManager
 import com.nekoplayer.ui.components.MiniPlayer
 import com.nekoplayer.ui.screens.SplashScreen
+import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
 /**
@@ -47,9 +52,37 @@ fun App() {
             // 初始化 AudioPlayer 和 QueueManager 的关联
             val player: AudioPlayer = koinInject()
             val queueManager: QueueManager = koinInject()
+            val playbackRepository: PlaybackRepository = koinInject()
 
+            // 恢复上次播放状态并启动自动保存
             LaunchedEffect(Unit) {
                 player.setQueueManager(queueManager)
+                
+                // 延迟一点等待数据库初始化完成
+                delay(500)
+                
+                // 加载上次保存的播放状态
+                val restoredState = playbackRepository.loadPlaybackState()
+                restoredState?.let { state ->
+                    if (state.queue.isNotEmpty()) {
+                        // 恢复播放队列
+                        val currentIndex = state.queue.indexOfFirst { it.id == state.currentSongId }
+                            .coerceAtLeast(0)
+                        queueManager.playQueue(state.queue, currentIndex)
+                        queueManager.setPlayMode(state.playMode)
+                        
+                        // 准备播放（但不自动播放）
+                        state.queue.getOrNull(currentIndex)?.let { song ->
+                            player.prepare(song)
+                            // 恢复播放位置
+                            player.seekTo(state.currentPosition)
+                        }
+                    }
+                }
+                
+                // 启动自动保存
+                val stateSaver = PlaybackStateSaver(playbackRepository, player, queueManager)
+                stateSaver.start()
             }
 
             // 主布局：内容区域 + 底部MiniPlayer
