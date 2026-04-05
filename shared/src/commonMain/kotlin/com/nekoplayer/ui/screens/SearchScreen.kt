@@ -2,6 +2,7 @@ package com.nekoplayer.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -11,12 +12,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -26,28 +29,38 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import com.nekoplayer.data.model.MusicSource
 import com.nekoplayer.data.model.Song
+import com.nekoplayer.player.QueueManager
+import com.nekoplayer.ui.components.AddToPlaylistDialog
+import com.nekoplayer.ui.components.SongActionSheet
 import com.nekoplayer.ui.viewmodel.SearchViewModel
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
  * 搜索界面 - Voyager Screen
+ * 支持长按弹出操作菜单：添加到歌单、下一首播放
  */
 class SearchScreen : Screen {
-    
+
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val viewModel: SearchViewModel = koinInject()
+        val queueManager: QueueManager = koinInject()
         val scope = rememberCoroutineScope()
-        
+
         val searchQuery by viewModel.searchQuery.collectAsState()
         val searchResults by viewModel.searchResults.collectAsState()
         val isLoading by viewModel.isLoading.collectAsState()
         val errorMessage by viewModel.errorMessage.collectAsState()
-        val isLoadingPlayUrl by viewModel.isLoadingPlayUrl.collectAsState()
-        
+
+        // 长按菜单状态
+        var selectedSong by remember { mutableStateOf<Song?>(null) }
+        var showActionSheet by remember { mutableStateOf(false) }
+        var showAddToPlaylist by remember { mutableStateOf(false) }
+
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -58,6 +71,31 @@ class SearchScreen : Screen {
                     .fillMaxSize()
                     .padding(16.dp)
             ) {
+                // 顶部栏 - 添加歌单入口
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "NekoPlayer",
+                        color = Color(0xFF00D4FF),
+                        fontSize = 20.sp
+                    )
+
+                    IconButton(
+                        onClick = { navigator.push(PlaylistListScreen()) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlaylistPlay,
+                            contentDescription = "我的歌单",
+                            tint = Color(0xFF00D4FF)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // 搜索栏
                 SearchBar(
                     query = searchQuery,
@@ -65,9 +103,9 @@ class SearchScreen : Screen {
                     onSearch = viewModel::search,
                     isLoading = isLoading
                 )
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // 错误提示
                 errorMessage?.let { error ->
                     Text(
@@ -79,7 +117,7 @@ class SearchScreen : Screen {
                             .padding(vertical = 8.dp)
                     )
                 }
-                
+
                 // 搜索结果列表
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -93,15 +131,53 @@ class SearchScreen : Screen {
                                     // 获取播放链接
                                     val songWithUrl = viewModel.getPlayUrl(song)
                                     if (songWithUrl != null) {
+                                        // 设置播放队列（整个搜索结果作为队列）
+                                        val index = searchResults.indexOf(song)
+                                        queueManager.playQueue(searchResults, index)
                                         // 跳转到播放界面
                                         navigator.push(NowPlayingScreen(songWithUrl))
                                     }
                                 }
+                            },
+                            onLongClick = {
+                                selectedSong = song
+                                showActionSheet = true
                             }
                         )
                     }
                 }
             }
+        }
+
+        // 长按操作菜单
+        if (showActionSheet && selectedSong != null) {
+            SongActionSheet(
+                song = selectedSong!!,
+                onDismiss = {
+                    showActionSheet = false
+                    selectedSong = null
+                },
+                onAddToPlaylist = {
+                    showActionSheet = false
+                    showAddToPlaylist = true
+                },
+                onPlayNext = {
+                    queueManager.addToQueueNext(selectedSong!!)
+                    showActionSheet = false
+                    selectedSong = null
+                }
+            )
+        }
+
+        // 添加到歌单弹窗
+        if (showAddToPlaylist && selectedSong != null) {
+            AddToPlaylistDialog(
+                song = selectedSong!!,
+                onDismiss = {
+                    showAddToPlaylist = false
+                    selectedSong = null
+                }
+            )
         }
     }
 }
@@ -117,11 +193,11 @@ private fun SearchBar(
         value = query,
         onValueChange = onQueryChange,
         modifier = Modifier.fillMaxWidth(),
-        placeholder = { 
+        placeholder = {
             Text(
-                "搜索歌曲、歌手...", 
+                "搜索歌曲、歌手...",
                 color = Color.White.copy(alpha = 0.5f)
-            ) 
+            )
         },
         leadingIcon = {
             Icon(
@@ -157,12 +233,18 @@ private fun SearchBar(
 @Composable
 private fun SongItem(
     song: Song,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onClick() },
+                    onLongPress = { onLongClick() }
+                )
+            },
         colors = CardDefaults.cardColors(
             containerColor = Color(0xFF1A1A2F)
         ),
@@ -184,9 +266,9 @@ private fun SongItem(
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF2A2A3F))
             )
-            
+
             Spacer(modifier = Modifier.width(12.dp))
-            
+
             // 歌曲信息
             Column(
                 modifier = Modifier.weight(1f)
@@ -198,18 +280,28 @@ private fun SongItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                
+
                 Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = song.artist,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 14.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+
+                // 来源标记 + 歌手
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 来源标签
+                    SourceTag(source = song.source)
+
+                    Spacer(modifier = Modifier.width(6.dp))
+
+                    Text(
+                        text = song.artist,
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
-            
+
             // 播放按钮
             IconButton(
                 onClick = onClick,
@@ -224,4 +316,22 @@ private fun SongItem(
             }
         }
     }
+}
+
+@Composable
+private fun SourceTag(source: MusicSource) {
+    val (text, color) = when (source) {
+        MusicSource.BILIBILI -> "bilibili" to Color(0xFFFF69B4)  // 粉红色
+        MusicSource.MIGU -> "migu" to Color(0xFF00D4FF)          // 粉蓝色
+    }
+
+    Text(
+        text = text,
+        color = color,
+        fontSize = 10.sp,
+        modifier = Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(color.copy(alpha = 0.15f))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
+    )
 }

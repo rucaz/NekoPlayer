@@ -32,100 +32,134 @@ import coil3.compose.AsyncImage
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
+import com.nekoplayer.player.QueueManager
 import kotlinx.coroutines.delay
 import org.koin.compose.koinInject
 
 /**
  * 模块化播放界面 - 参考赛博朋克音乐播放器设计
  * 布局：左侧大封面 + 右侧模块化控制面板
+ * 现在支持队列播放，从 QueueManager 获取当前歌曲
  */
-data class NowPlayingScreen(val song: Song) : Screen {
-    
+class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
+
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val player: AudioPlayer = koinInject()
-        
+        val queueManager: QueueManager = koinInject()
+
+        // 从 QueueManager 获取当前歌曲，如果没有则使用初始歌曲
+        val queueCurrentSong by queueManager.currentSong.collectAsState()
+        val currentSong = queueCurrentSong ?: initialSong
+
         val playerState by player.playerState.collectAsState()
         val currentPosition by player.currentPosition.collectAsState()
         val duration by player.duration.collectAsState()
         val waveformData by player.waveformData.collectAsState()
-        
-        val actualDuration = if (duration > 0) duration else song.duration
-        
-        // 页面加载时准备播放
-        LaunchedEffect(song) {
-            player.prepare(song)
-            delay(500)
-            player.play()
+
+        // 当队列中的歌曲变化时，准备播放新歌曲
+        LaunchedEffect(queueCurrentSong) {
+            queueCurrentSong?.let { song ->
+                if (playerState !is PlayerState.Playing ||
+                    (playerState as? PlayerState.Playing)?.song?.id != song.id) {
+                    player.prepare(song)
+                    delay(300)
+                    player.play()
+                }
+            }
         }
-        
-        Box(modifier = Modifier.fillMaxSize()) {
-            // ========== 背景层 ==========
-            AsyncImage(
-                model = song.coverUrl,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .blur(60.dp)
-                    .alpha(0.7f)
-            )
-            
-            // 暗色渐变蒙版
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF0A0A0F).copy(alpha = 0.3f),
-                                Color(0xFF0A0A0F).copy(alpha = 0.85f),
-                                Color(0xFF0A0A0F).copy(alpha = 0.95f)
+
+        // 初始歌曲的播放准备（当队列为空时）
+        LaunchedEffect(Unit) {
+            if (queueCurrentSong == null && initialSong != null) {
+                queueManager.playQueue(listOf(initialSong), 0)
+            }
+        }
+
+        currentSong?.let { song ->
+            val actualDuration = if (duration > 0) duration else song.duration
+
+            Box(modifier = Modifier.fillMaxSize()) {
+                // ========== 背景层 ==========
+                AsyncImage(
+                    model = song.coverUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .blur(60.dp)
+                        .alpha(0.7f)
+                )
+
+                // 暗色渐变蒙版
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF0A0A0F).copy(alpha = 0.3f),
+                                    Color(0xFF0A0A0F).copy(alpha = 0.85f),
+                                    Color(0xFF0A0A0F).copy(alpha = 0.95f)
+                                )
                             )
                         )
-                    )
-            )
-            
-            // 网格装饰线
-            GridDecoration()
-            
-            // ========== 内容层 ==========
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
-                // 顶部导航栏
-                TopBar(onBack = { navigator.pop() })
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                // 主内容区 - 左右布局
-                Row(
+                )
+
+                // 网格装饰线
+                GridDecoration()
+
+                // ========== 内容层 ==========
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp)
+                        .fillMaxSize()
+                        .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    // 左侧：大封面 + 旋转装饰
-                    CoverSection(
-                        song = song,
-                        isPlaying = playerState is PlayerState.Playing,
-                        modifier = Modifier.weight(1.2f)
-                    )
-                    
-                    // 右侧：模块化控制面板
-                    ControlPanel(
-                        song = song,
-                        player = player,
-                        playerState = playerState,
-                        currentPosition = currentPosition,
-                        duration = actualDuration,
-                        waveformData = waveformData,
-                        modifier = Modifier.weight(1f)
-                    )
+                    // 顶部导航栏
+                    TopBar(onBack = { navigator.pop() })
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    // 主内容区 - 左右布局
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp)
+                    ) {
+                        // 左侧：大封面 + 旋转装饰
+                        CoverSection(
+                            song = song,
+                            isPlaying = playerState is PlayerState.Playing,
+                            modifier = Modifier.weight(1.2f)
+                        )
+
+                        // 右侧：模块化控制面板
+                        ControlPanel(
+                            song = song,
+                            player = player,
+                            queueManager = queueManager,
+                            playerState = playerState,
+                            currentPosition = currentPosition,
+                            duration = actualDuration,
+                            waveformData = waveformData,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
+            }
+        } ?: run {
+            // 没有歌曲时显示空状态
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "没有正在播放的歌曲",
+                    color = Color.White.copy(alpha = 0.6f),
+                    fontSize = 16.sp
+                )
             }
         }
     }
@@ -144,7 +178,7 @@ private fun TopBar(onBack: () -> Unit) {
             icon = Icons.Default.ArrowBack,
             contentDescription = "返回"
         )
-        
+
         // 标题 - 霓虹风格
         Text(
             text = "NekoPlayer",
@@ -152,12 +186,19 @@ private fun TopBar(onBack: () -> Unit) {
             fontSize = 20.sp,
             modifier = Modifier.alpha(0.9f)
         )
-        
-        // 菜单按钮
+
+        // 播放模式按钮
+        val queueManager: QueueManager = koinInject()
+        val playMode by queueManager.playMode.collectAsState()
+
         GlassButton(
-            onClick = { },
-            icon = Icons.Default.MoreVert,
-            contentDescription = "更多"
+            onClick = { queueManager.togglePlayMode() },
+            icon = when (playMode) {
+                QueueManager.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
+                QueueManager.PlayMode.SHUFFLE -> Icons.Default.Shuffle
+                QueueManager.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
+            },
+            contentDescription = "播放模式"
         )
     }
 }
@@ -183,7 +224,7 @@ private fun CoverSection(
                     repeatMode = RepeatMode.Restart
                 )
             )
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxWidth(0.95f)
@@ -197,13 +238,13 @@ private fun CoverSection(
                         style = Stroke(width = 2.dp.toPx()),
                         radius = size.minDimension / 2 - 4.dp.toPx()
                     )
-                    
+
                     // 刻度线
                     for (i in 0 until 60 step 5) {
                         val angle = Math.toRadians(i * 6.0 - 90)
                         val startRadius = size.minDimension / 2 - 16.dp.toPx()
                         val endRadius = size.minDimension / 2 - 8.dp.toPx()
-                        
+
                         drawLine(
                             color = Color(0xFF00D4FF).copy(alpha = 0.5f),
                             start = Offset(
@@ -220,7 +261,7 @@ private fun CoverSection(
                 }
             }
         }
-        
+
         // 封面图片 - 带发光效果
         Box(
             modifier = Modifier
@@ -235,7 +276,7 @@ private fun CoverSection(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            
+
             // 内阴影效果
             Box(
                 modifier = Modifier
@@ -258,6 +299,7 @@ private fun CoverSection(
 private fun ControlPanel(
     song: Song,
     player: AudioPlayer,
+    queueManager: QueueManager,
     playerState: PlayerState,
     currentPosition: Long,
     duration: Long,
@@ -278,9 +320,9 @@ private fun ControlPanel(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Text(
                     text = song.artist,
                     color = Color.White.copy(alpha = 0.6f),
@@ -290,7 +332,7 @@ private fun ControlPanel(
                 )
             }
         }
-        
+
         // ========== 模块2：波形可视化 ==========
         GlassCard {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -300,7 +342,7 @@ private fun ControlPanel(
                     fontSize = 10.sp,
                     modifier = Modifier.padding(bottom = 12.dp)
                 )
-                
+
                 WaveformVisualizer(
                     waveformData = waveformData,
                     modifier = Modifier
@@ -309,7 +351,7 @@ private fun ControlPanel(
                 )
             }
         }
-        
+
         // ========== 模块3：进度控制 ==========
         GlassCard {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -320,9 +362,9 @@ private fun ControlPanel(
                     valueRange = 0f..duration.toFloat().coerceAtLeast(1f),
                     modifier = Modifier.fillMaxWidth()
                 )
-                
+
                 Spacer(modifier = Modifier.height(8.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -340,7 +382,7 @@ private fun ControlPanel(
                 }
             }
         }
-        
+
         // ========== 模块4：播放控制 ==========
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -348,14 +390,12 @@ private fun ControlPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 上一首
-            // 上一首按钮
-            IconButton(
-                onClick = { },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Text("⏮", color = Color.White, fontSize = 24.sp)
-            }
-            
+            ControlButton(
+                onClick = { player.playPrevious() },
+                icon = Icons.Default.SkipPrevious,
+                size = 48.dp
+            )
+
             // 播放/暂停
             val isPlaying = playerState is PlayerState.Playing
             NeonPlayButton(
@@ -364,15 +404,13 @@ private fun ControlPanel(
                     if (isPlaying) player.pause() else player.play()
                 }
             )
-            
+
             // 下一首
-            // 下一首按钮
-            IconButton(
-                onClick = { },
-                modifier = Modifier.size(48.dp)
-            ) {
-                Text("⏭", color = Color.White, fontSize = 24.sp)
-            }
+            ControlButton(
+                onClick = { player.playNext() },
+                icon = Icons.Default.SkipNext,
+                size = 48.dp
+            )
         }
     }
 }
@@ -438,7 +476,7 @@ private fun NeonPlayButton(
     onClick: () -> Unit
 ) {
     val neonColor = Color(0xFF00D4FF)
-    
+
     Box(
         modifier = Modifier
             .size(72.dp)
@@ -462,11 +500,12 @@ private fun NeonPlayButton(
                 .clip(RoundedCornerShape(18.dp))
                 .background(neonColor.copy(alpha = 0.2f))
         )
-        
-        Text(
-            text = if (isPlaying) "⏸" else "▶",
-            color = neonColor,
-            fontSize = 28.sp
+
+        Icon(
+            imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+            contentDescription = if (isPlaying) "暂停" else "播放",
+            tint = neonColor,
+            modifier = Modifier.size(36.dp)
         )
     }
 }
@@ -502,7 +541,7 @@ private fun CustomSlider(
     modifier: Modifier = Modifier
 ) {
     val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
-    
+
     Box(
         modifier = modifier
             .height(24.dp)
@@ -517,7 +556,7 @@ private fun CustomSlider(
                 .background(Color.White.copy(alpha = 0.2f))
                 .align(Alignment.Center)
         )
-        
+
         // 进度条
         Box(
             modifier = Modifier
@@ -534,7 +573,7 @@ private fun CustomSlider(
                 )
                 .align(Alignment.CenterStart)
         )
-        
+
         // 滑块
         Box(
             modifier = Modifier
@@ -575,22 +614,22 @@ private fun WaveformVisualizer(
     } else {
         waveformData.map { (it + 1f) / 2f }
     }
-    
+
     Canvas(modifier = modifier) {
         val barCount = 20
         val barWidth = size.width / (barCount * 1.8f)
         val gap = barWidth * 0.8f
-        
+
         val step = displayData.size / barCount
-        
+
         for (i in 0 until barCount) {
             val dataIndex = (i * step).coerceIn(0, displayData.size - 1)
             val amplitude = displayData[dataIndex].coerceIn(0.1f, 1f)
-            
+
             val barHeight = size.height * amplitude
             val x = i * (barWidth + gap) + (size.width - barCount * (barWidth + gap)) / 2
             val y = (size.height - barHeight) / 2
-            
+
             // 圆角条形
             drawRoundRect(
                 brush = Brush.verticalGradient(
@@ -614,7 +653,7 @@ private fun GridDecoration() {
     Canvas(modifier = Modifier.fillMaxSize()) {
         val lineColor = Color(0xFF00D4FF).copy(alpha = 0.03f)
         val step = 40.dp.toPx()
-        
+
         // 垂直线
         for (x in 0..size.width.toInt() step step.toInt()) {
             drawLine(
@@ -624,7 +663,7 @@ private fun GridDecoration() {
                 strokeWidth = 1f
             )
         }
-        
+
         // 水平线
         for (y in 0..size.height.toInt() step step.toInt()) {
             drawLine(
