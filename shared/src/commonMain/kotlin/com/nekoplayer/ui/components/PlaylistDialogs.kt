@@ -112,10 +112,18 @@ fun AddToPlaylistDialog(
                 ) {
                     items(playlists, key = { it.id }) { playlist ->
                         var isAlreadyInPlaylist by remember { mutableStateOf(false) }
+                        var checkError by remember { mutableStateOf(false) }
 
                         // 检查歌曲是否已在歌单中
                         LaunchedEffect(playlist.id, song.id) {
-                            isAlreadyInPlaylist = playlistRepository.isSongInPlaylist(playlist.id, song.id)
+                            try {
+                                isAlreadyInPlaylist = playlistRepository.isSongInPlaylist(playlist.id, song.id)
+                                checkError = false
+                            } catch (e: Exception) {
+                                // 数据库查询失败，默认设为false
+                                isAlreadyInPlaylist = false
+                                checkError = true
+                            }
                         }
 
                         val isAdding = addingPlaylistId == playlist.id
@@ -125,13 +133,18 @@ fun AddToPlaylistDialog(
                             isAlreadyAdded = isAlreadyInPlaylist,
                             isAdding = isAdding,
                             onClick = {
-                                if (!isAlreadyInPlaylist && !isAdding) {
+                                if (!isAlreadyInPlaylist && !isAdding && !checkError) {
                                     addingPlaylistId = playlist.id
                                     scope.launch {
-                                        val success = playlistRepository.addSongToPlaylist(playlist.id, song)
-                                        addingPlaylistId = null
-                                        if (success) {
-                                            onDismiss()
+                                        try {
+                                            val success = playlistRepository.addSongToPlaylist(playlist.id, song)
+                                            addingPlaylistId = null
+                                            if (success) {
+                                                onDismiss()
+                                            }
+                                        } catch (e: Exception) {
+                                            addingPlaylistId = null
+                                            // 添加失败
                                         }
                                     }
                                 }

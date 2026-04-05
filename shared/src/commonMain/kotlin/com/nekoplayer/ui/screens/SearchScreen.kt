@@ -128,12 +128,11 @@ class SearchScreen : Screen {
                             song = song,
                             onClick = {
                                 scope.launch {
-                                    // 获取播放链接
+                                    // 获取当前点击歌曲的播放链接
                                     val songWithUrl = viewModel.getPlayUrl(song)
                                     if (songWithUrl != null) {
-                                        // 设置播放队列（整个搜索结果作为队列）
-                                        val index = searchResults.indexOf(song)
-                                        queueManager.playQueue(searchResults, index)
+                                        // 只将当前歌曲加入队列（避免队列中有无效歌曲）
+                                        queueManager.playQueue(listOf(songWithUrl), 0)
                                         // 跳转到播放界面
                                         navigator.push(NowPlayingScreen(songWithUrl))
                                     }

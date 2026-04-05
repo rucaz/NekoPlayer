@@ -38,8 +38,8 @@ val androidModule = module {
     // ViewModel - 使用single让搜索状态在页面间保持
     single { SearchViewModel(get()) }
     
-    // Player
-    factory { AudioPlayer() }
+    // Player - 使用single确保全局唯一实例
+    single { AudioPlayer() }
     
     // Queue Manager (单例，全局共享)
     single { QueueManager() }
