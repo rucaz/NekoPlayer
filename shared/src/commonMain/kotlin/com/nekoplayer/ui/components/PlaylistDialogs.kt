@@ -197,7 +197,11 @@ private fun CreatePlaylistInline(
         Spacer(modifier = Modifier.width(8.dp))
 
         TextButton(
-            onClick = onCancel,
+            onClick = { 
+                if (name.isNotBlank()) {
+                    onCreate(name)
+                }
+            },
             enabled = name.isNotBlank()
         ) {
             Text("确认", color = if (name.isNotBlank()) Color(0xFF00D4FF) else Color.White.copy(alpha = 0.3f))

@@ -4,6 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,8 +23,12 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
@@ -540,12 +546,44 @@ private fun CustomSlider(
     valueRange: ClosedFloatingPointRange<Float>,
     modifier: Modifier = Modifier
 ) {
-    val progress = (value - valueRange.start) / (valueRange.endInclusive - valueRange.start)
+    var sliderWidth by remember { mutableStateOf(0f) }
+    var isDragging by remember { mutableStateOf(false) }
+    var dragValue by remember { mutableStateOf(value) }
+    
+    val currentValue = if (isDragging) dragValue else value
+    val progress = ((currentValue - valueRange.start) / (valueRange.endInclusive - valueRange.start))
+        .coerceIn(0f, 1f)
 
     Box(
         modifier = modifier
             .height(24.dp)
             .fillMaxWidth()
+            .onSizeChanged { sliderWidth = it.width.toFloat() }
+            .pointerInput(Unit) {
+                detectTapGestures { offset ->
+                    val newProgress = (offset.x / sliderWidth).coerceIn(0f, 1f)
+                    val newValue = valueRange.start + newProgress * (valueRange.endInclusive - valueRange.start)
+                    onValueChange(newValue)
+                }
+            }
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { 
+                        isDragging = true
+                        dragValue = value
+                    },
+                    onDragEnd = { 
+                        isDragging = false
+                        onValueChange(dragValue)
+                    },
+                    onDragCancel = { isDragging = false },
+                    onHorizontalDrag = { change, dragAmount ->
+                        change.consume()
+                        val dragProgress = (change.position.x / sliderWidth).coerceIn(0f, 1f)
+                        dragValue = valueRange.start + dragProgress * (valueRange.endInclusive - valueRange.start)
+                    }
+                )
+            }
     ) {
         // 背景轨道
         Box(
@@ -560,7 +598,7 @@ private fun CustomSlider(
         // 进度条
         Box(
             modifier = Modifier
-                .fillMaxWidth(progress.coerceIn(0f, 1f))
+                .fillMaxWidth(progress)
                 .height(4.dp)
                 .clip(RoundedCornerShape(2.dp))
                 .background(
@@ -575,19 +613,21 @@ private fun CustomSlider(
         )
 
         // 滑块
+        val density = LocalDensity.current
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(24.dp),
+                .fillMaxHeight()
+                .padding(vertical = 4.dp),
             contentAlignment = Alignment.CenterStart
         ) {
+            val thumbOffset = with(density) { (progress * sliderWidth).toDp() }
             Box(
                 modifier = Modifier
-                    .offset(x = (progress * 1000).dp / 10) // 简化计算
+                    .offset(x = thumbOffset - 8.dp)
                     .size(16.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(Color(0xFF00D4FF))
-                    .clickable { }
+                    .then(if (isDragging) Modifier.padding(2.dp) else Modifier)
             )
         }
     }
