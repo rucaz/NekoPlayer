@@ -72,8 +72,8 @@ fun AddToPlaylistDialog(
                         onCreate = { name ->
                             scope.launch {
                                 val playlistId = playlistRepository.createPlaylist(name)
-                                playlistRepository.addSongToPlaylist(playlistId, song)
-                                onDismiss()
+                                // 创建后隐藏输入框，让用户看到新歌单并选择
+                                showCreateNew = false
                             }
                         },
                         onCancel = { showCreateNew = false }

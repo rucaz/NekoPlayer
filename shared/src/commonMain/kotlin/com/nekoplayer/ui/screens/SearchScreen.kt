@@ -158,6 +158,7 @@ class SearchScreen : Screen {
                 },
                 onAddToPlaylist = {
                     showActionSheet = false
+                    // 注意：不清空 selectedSong，因为 AddToPlaylistDialog 需要它
                     showAddToPlaylist = true
                 },
                 onPlayNext = {
