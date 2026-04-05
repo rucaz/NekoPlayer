@@ -42,6 +42,7 @@ fun AddToPlaylistDialog(
     val playlists by playlistRepository.getAllPlaylists().collectAsState(initial = emptyList())
     var showCreateNew by remember { mutableStateOf(false) }
     var addingPlaylistId by remember { mutableStateOf<String?>(null) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -63,6 +64,16 @@ fun AddToPlaylistDialog(
                     fontSize = 18.sp,
                     modifier = Modifier.padding(16.dp)
                 )
+
+                // 错误消息
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        color = Color(0xFFFF5252),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
 
                 Divider(color = Color.White.copy(alpha = 0.1f))
 
@@ -150,10 +161,13 @@ fun AddToPlaylistDialog(
                                             addingPlaylistId = null
                                             if (success) {
                                                 onDismiss()
+                                            } else {
+                                                // 添加失败（可能已存在）
+                                                errorMessage = "添加失败，歌曲可能已存在"
                                             }
                                         } catch (e: Exception) {
                                             addingPlaylistId = null
-                                            // 添加失败，打印错误
+                                            errorMessage = "添加失败: ${e.message}"
                                             e.printStackTrace()
                                         }
                                     }

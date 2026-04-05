@@ -121,36 +121,53 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * @return 是否成功添加（如果歌曲已存在则返回false）
      */
     suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.Default) {
-        // 检查是否已存在（在同一事务中）
-        val exists = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne() > 0
-        if (exists) {
-            return@withContext false
+        try {
+            // 检查是否已存在
+            val count = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne()
+            val exists = count > 0
+            
+            if (exists) {
+                return@withContext false
+            }
+
+            // 获取当前最大排序值
+            val maxOrderResult = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull()
+            val maxOrder = maxOrderResult?.toString()?.toLongOrNull() ?: 0L
+            val nextOrder = maxOrder + 1L
+
+            // 插入歌曲
+            val songJson = json.encodeToString(song)
+            database.playlistSongQueries.insert(
+                id = generateId(),
+                playlistId = playlistId,
+                songId = song.id,
+                songJson = songJson,
+                addedAt = getCurrentTimeMillis(),
+                order = nextOrder
+            )
+
+            // 更新歌单更新时间
+            try {
+                val playlist = database.playlistQueries.getById(playlistId).executeAsOneOrNull()
+                if (playlist != null) {
+                    database.playlistQueries.update(
+                        name = playlist.name,
+                        coverUrl = playlist.coverUrl,
+                        updatedAt = getCurrentTimeMillis(),
+                        id = playlistId
+                    )
+                }
+            } catch (e: Exception) {
+                // 更新歌单时间失败不影响主流程
+                e.printStackTrace()
+            }
+
+            true
+        } catch (e: Exception) {
+            // 添加失败，打印详细错误
+            e.printStackTrace()
+            false
         }
-
-        // 获取当前最大排序值
-        val maxOrderResult = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull()
-        val maxOrder = maxOrderResult?.toString()?.toLongOrNull() ?: 0L
-        val nextOrder = maxOrder + 1L
-
-        database.playlistSongQueries.insert(
-            id = generateId(),
-            playlistId = playlistId,
-            songId = song.id,
-            songJson = json.encodeToString(song),
-            addedAt = getCurrentTimeMillis(),
-            order = nextOrder
-        )
-
-        // 更新歌单更新时间
-        val playlist = database.playlistQueries.getById(playlistId).executeAsOne()
-        database.playlistQueries.update(
-            name = playlist.name,
-            coverUrl = playlist.coverUrl,
-            updatedAt = getCurrentTimeMillis(),
-            id = playlistId
-        )
-
-        true
     }
 
     /**
