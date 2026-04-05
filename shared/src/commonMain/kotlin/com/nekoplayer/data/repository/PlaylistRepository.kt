@@ -120,8 +120,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
         }
 
         // 获取当前最大排序值
-        val songs = database.playlistSongQueries.getSongsByPlaylist(playlistId).executeAsList()
-        val maxOrder = songs.maxOfOrNull { it.order } ?: 0L
+        val maxOrder = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull() ?: 0L
         val nextOrder = maxOrder + 1
 
         database.playlistSongQueries.insert(
