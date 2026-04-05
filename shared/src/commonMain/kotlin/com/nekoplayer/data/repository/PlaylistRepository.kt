@@ -107,7 +107,13 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * 检查歌曲是否已在歌单中
      */
     suspend fun isSongInPlaylist(playlistId: String, songId: String): Boolean = withContext(Dispatchers.Default) {
-        database.playlistSongQueries.isSongInPlaylist(playlistId, songId).executeAsOne() > 0
+        try {
+            val count = database.playlistSongQueries.isSongInPlaylist(playlistId, songId).executeAsOne()
+            count > 0
+        } catch (e: Exception) {
+            // 查询失败时默认返回false，允许尝试添加
+            false
+        }
     }
 
     /**

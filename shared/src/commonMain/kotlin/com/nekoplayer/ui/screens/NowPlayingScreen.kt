@@ -126,7 +126,10 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     // 顶部导航栏
-                    TopBar(onBack = { navigator.pop() })
+                    TopBar(
+                        onBack = { navigator.pop() },
+                        onQueueClick = { navigator.push(NowPlayingQueueScreen()) }
+                    )
 
                     Spacer(modifier = Modifier.height(20.dp))
 
@@ -175,7 +178,7 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
 }
 
 @Composable
-private fun TopBar(onBack: () -> Unit) {
+private fun TopBar(onBack: () -> Unit, onQueueClick: () -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -196,19 +199,30 @@ private fun TopBar(onBack: () -> Unit) {
             modifier = Modifier.alpha(0.9f)
         )
 
-        // 播放模式按钮
-        val queueManager: QueueManager = koinInject()
-        val playMode by queueManager.playMode.collectAsState()
+        Row {
+            // 队列按钮
+            GlassButton(
+                onClick = onQueueClick,
+                icon = Icons.Default.List,
+                contentDescription = "播放队列"
+            )
 
-        GlassButton(
-            onClick = { queueManager.togglePlayMode() },
-            icon = when (playMode) {
-                QueueManager.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
-                QueueManager.PlayMode.SHUFFLE -> Icons.Default.Shuffle
-                QueueManager.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
-            },
-            contentDescription = "播放模式"
-        )
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // 播放模式按钮
+            val queueManager: QueueManager = koinInject()
+            val playMode by queueManager.playMode.collectAsState()
+
+            GlassButton(
+                onClick = { queueManager.togglePlayMode() },
+                icon = when (playMode) {
+                    QueueManager.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
+                    QueueManager.PlayMode.SHUFFLE -> Icons.Default.Shuffle
+                    QueueManager.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
+                },
+                contentDescription = "播放模式"
+            )
+        }
     }
 }
 
