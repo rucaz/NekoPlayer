@@ -52,7 +52,7 @@ actual class AudioPlayer : KoinComponent {
     }
     
     actual fun prepare(song: Song) {
-        // 如果正在播放同一首歌，不重新准备
+        // 如果正在播放同一首歌且播放器实例存在，不重新准备
         if (currentSong?.id == song.id && exoPlayer != null) {
             return
         }
@@ -60,7 +60,6 @@ actual class AudioPlayer : KoinComponent {
         currentSong = song
         _playerState.value = PlayerState.Loading
         
-        // 停止当前播放但保留实例（如果URL相同）
         val playUrl = song.playUrl
         if (playUrl.isNullOrEmpty()) {
             _playerState.value = PlayerState.Error("无效的播放链接")

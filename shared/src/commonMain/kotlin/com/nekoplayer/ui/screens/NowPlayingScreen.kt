@@ -67,8 +67,11 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
         // 当队列中的歌曲变化时，准备播放新歌曲
         LaunchedEffect(queueCurrentSong) {
             queueCurrentSong?.let { song ->
-                if (playerState !is PlayerState.Playing ||
-                    (playerState as? PlayerState.Playing)?.song?.id != song.id) {
+                // 只要当前播放器里的歌曲和队列歌曲不一致，就重新准备
+                val currentPlayerSong = (playerState as? PlayerState.Playing)?.song 
+                    ?: (playerState as? PlayerState.Paused)?.song
+                
+                if (currentPlayerSong?.id != song.id) {
                     player.prepare(song)
                     delay(300)
                     player.play()
