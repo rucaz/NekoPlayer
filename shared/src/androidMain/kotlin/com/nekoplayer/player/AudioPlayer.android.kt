@@ -11,15 +11,14 @@ import com.nekoplayer.data.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.koin.core.component.KoinComponent
-import org.koin.core.component.inject
+import org.koin.java.KoinJavaComponent
 
 /**
  * Android平台音频播放器实现（使用ExoPlayer）
  */
-actual class AudioPlayer : KoinComponent {
+actual class AudioPlayer {
     
-    private val context: Context by inject()
+    private val context: Context = KoinJavaComponent.getKoin().get()
     
     private var exoPlayer: ExoPlayer? = null
     private var visualizer: Visualizer? = null
