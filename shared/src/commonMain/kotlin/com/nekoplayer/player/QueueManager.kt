@@ -82,20 +82,23 @@ class QueueManager {
     }
 
     /**
-     * 插入歌曲到下一首播放
+     * 插入歌曲到下一首播放，并立即播放它
      */
-    fun addToQueueNext(song: Song) {
+    fun playNextImmediately(song: Song): Song {
         val currentIdx = _currentIndex.value
         if (currentIdx < 0) {
             // 队列空，直接播放
             playQueue(listOf(song))
-            return
+            return song
         }
 
         val newQueue = _currentQueue.value.toMutableList()
         // 插入到当前索引+1的位置
         newQueue.add(currentIdx + 1, song)
         _currentQueue.value = newQueue
+        
+        // 立即切换到下一首（即刚插入的歌曲）
+        return playNext() ?: song
     }
 
     /**

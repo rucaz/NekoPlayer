@@ -52,16 +52,23 @@ actual class AudioPlayer : KoinComponent {
     }
     
     actual fun prepare(song: Song) {
+        // 如果正在播放同一首歌，不重新准备
+        if (currentSong?.id == song.id && exoPlayer != null) {
+            return
+        }
+        
         currentSong = song
         _playerState.value = PlayerState.Loading
         
-        release() // 释放之前的播放器
-        
+        // 停止当前播放但保留实例（如果URL相同）
         val playUrl = song.playUrl
         if (playUrl.isNullOrEmpty()) {
             _playerState.value = PlayerState.Error("无效的播放链接")
             return
         }
+        
+        // 释放旧播放器
+        release()
         
         exoPlayer = ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(playUrl))

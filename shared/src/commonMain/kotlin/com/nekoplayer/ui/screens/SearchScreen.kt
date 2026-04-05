@@ -161,9 +161,18 @@ class SearchScreen : Screen {
                     showAddToPlaylist = true
                 },
                 onPlayNext = {
-                    queueManager.addToQueueNext(selectedSong!!)
-                    showActionSheet = false
-                    selectedSong = null
+                    scope.launch {
+                        val songWithUrl = viewModel.getPlayUrl(selectedSong!!)
+                        if (songWithUrl != null) {
+                            val nextSong = queueManager.playNextImmediately(songWithUrl)
+                            // 如果当前没有在播放，需要跳转到播放页
+                            if (queueManager.currentIndex.value == 0) {
+                                navigator.push(NowPlayingScreen(nextSong))
+                            }
+                        }
+                        showActionSheet = false
+                        selectedSong = null
+                    }
                 }
             )
         }

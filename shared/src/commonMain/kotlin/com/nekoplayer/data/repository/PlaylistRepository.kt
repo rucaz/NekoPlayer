@@ -114,8 +114,9 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * @return 是否成功添加（如果歌曲已存在则返回false）
      */
     suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.IO) {
-        // 检查是否已存在
-        if (isSongInPlaylist(playlistId, song.id)) {
+        // 检查是否已存在（在同一事务中）
+        val exists = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne() > 0
+        if (exists) {
             return@withContext false
         }
 
@@ -133,9 +134,10 @@ class PlaylistRepository(private val database: NekoDatabase) {
         )
 
         // 更新歌单更新时间
+        val playlist = database.playlistQueries.getById(playlistId).executeAsOne()
         database.playlistQueries.update(
-            name = database.playlistQueries.getById(playlistId).executeAsOne().name,
-            coverUrl = database.playlistQueries.getById(playlistId).executeAsOne().coverUrl,
+            name = playlist.name,
+            coverUrl = playlist.coverUrl,
             updatedAt = System.currentTimeMillis(),
             id = playlistId
         )
