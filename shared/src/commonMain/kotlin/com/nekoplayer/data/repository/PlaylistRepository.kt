@@ -121,21 +121,28 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * @return 是否成功添加（如果歌曲已存在则返回false）
      */
     suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.Default) {
+        println("[NekoPlaylist] addSongToPlaylist called: playlistId=$playlistId, songId=${song.id}")
         try {
             // 检查是否已存在
+            println("[NekoPlaylist] Checking if song exists...")
             val count = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne()
+            println("[NekoPlaylist] Count result: $count")
             val exists = count > 0
             
             if (exists) {
+                println("[NekoPlaylist] Song already exists, returning false")
                 return@withContext false
             }
 
             // 获取当前最大排序值
+            println("[NekoPlaylist] Getting max order...")
             val maxOrderResult = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull()
             val maxOrder = maxOrderResult?.toString()?.toLongOrNull() ?: 0L
             val nextOrder = maxOrder + 1L
+            println("[NekoPlaylist] Next order: $nextOrder")
 
             // 插入歌曲
+            println("[NekoPlaylist] Inserting song...")
             val songJson = json.encodeToString(song)
             database.playlistSongQueries.insert(
                 id = generateId(),
@@ -145,9 +152,11 @@ class PlaylistRepository(private val database: NekoDatabase) {
                 addedAt = getCurrentTimeMillis(),
                 order = nextOrder
             )
+            println("[NekoPlaylist] Insert successful")
 
             // 更新歌单更新时间
             try {
+                println("[NekoPlaylist] Updating playlist timestamp...")
                 val playlist = database.playlistQueries.getById(playlistId).executeAsOneOrNull()
                 if (playlist != null) {
                     database.playlistQueries.update(
@@ -156,15 +165,17 @@ class PlaylistRepository(private val database: NekoDatabase) {
                         updatedAt = getCurrentTimeMillis(),
                         id = playlistId
                     )
+                    println("[NekoPlaylist] Playlist timestamp updated")
                 }
             } catch (e: Exception) {
-                // 更新歌单时间失败不影响主流程
+                println("[NekoPlaylist] WARNING: Failed to update playlist timestamp: ${e.message}")
                 e.printStackTrace()
             }
 
+            println("[NekoPlaylist] Returning true")
             true
         } catch (e: Exception) {
-            // 添加失败，打印详细错误
+            println("[NekoPlaylist] ERROR adding song: ${e.message}")
             e.printStackTrace()
             false
         }

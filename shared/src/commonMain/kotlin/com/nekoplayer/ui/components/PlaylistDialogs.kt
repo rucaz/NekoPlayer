@@ -29,6 +29,11 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
+ * Log tag for debugging
+ */
+private const val TAG = "NekoPlaylist"
+
+/**
  * 添加到歌单选择器
  */
 @Composable
@@ -39,10 +44,16 @@ fun AddToPlaylistDialog(
     val playlistRepository: PlaylistRepository = koinInject()
     val scope = rememberCoroutineScope()
 
+    println("[$TAG] Dialog opened for song: ${song.id} - ${song.title}")
+
     val playlists by playlistRepository.getAllPlaylists().collectAsState(initial = emptyList())
     var showCreateNew by remember { mutableStateOf(false) }
     var addingPlaylistId by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(playlists) {
+        println("[$TAG] Loaded ${playlists.size} playlists")
+    }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -137,12 +148,14 @@ fun AddToPlaylistDialog(
 
                         // 检查歌曲是否已在歌单中
                         LaunchedEffect(playlist.id, song.id) {
+                            println("[$TAG] Checking if song ${song.id} is in playlist ${playlist.id}")
                             try {
                                 isAlreadyInPlaylist = playlistRepository.isSongInPlaylist(playlist.id, song.id)
+                                println("[$TAG] Check result: isAlreadyInPlaylist = $isAlreadyInPlaylist")
                             } catch (e: Exception) {
-                                // 数据库查询失败，默认设为false，允许用户尝试添加
-                                isAlreadyInPlaylist = false
+                                println("[$TAG] ERROR checking song in playlist: ${e.message}")
                                 e.printStackTrace()
+                                isAlreadyInPlaylist = false
                             }
                         }
 
@@ -153,24 +166,32 @@ fun AddToPlaylistDialog(
                             isAlreadyAdded = isAlreadyInPlaylist,
                             isAdding = isAdding,
                             onClick = {
+                                println("[$TAG] Clicked on playlist: ${playlist.id} - ${playlist.name}")
+                                println("[$TAG] isAlreadyInPlaylist=$isAlreadyInPlaylist, isAdding=$isAdding")
                                 if (!isAlreadyInPlaylist && !isAdding) {
                                     addingPlaylistId = playlist.id
                                     scope.launch {
                                         try {
+                                            println("[$TAG] Calling addSongToPlaylist...")
                                             val success = playlistRepository.addSongToPlaylist(playlist.id, song)
+                                            println("[$TAG] addSongToPlaylist returned: $success")
                                             addingPlaylistId = null
                                             if (success) {
+                                                println("[$TAG] Success! Dismissing dialog")
                                                 onDismiss()
                                             } else {
-                                                // 添加失败（可能已存在）
+                                                println("[$TAG] Failed to add song")
                                                 errorMessage = "添加失败，歌曲可能已存在"
                                             }
                                         } catch (e: Exception) {
                                             addingPlaylistId = null
-                                            errorMessage = "添加失败: ${e.message}"
+                                            println("[$TAG] EXCEPTION: ${e.message}")
                                             e.printStackTrace()
+                                            errorMessage = "添加失败: ${e.message}"
                                         }
                                     }
+                                } else {
+                                    println("[$TAG] Click ignored: isAlreadyInPlaylist=$isAlreadyInPlaylist, isAdding=$isAdding")
                                 }
                             }
                         )
