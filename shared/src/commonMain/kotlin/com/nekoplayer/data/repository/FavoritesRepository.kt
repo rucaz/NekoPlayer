@@ -2,11 +2,14 @@ package com.nekoplayer.data.repository
 
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.database.NekoDatabase
+import com.nekoplayer.utils.currentTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 /**
  * 收藏/爱听歌单管理
@@ -20,11 +23,12 @@ class FavoritesRepository(private val database: NekoDatabase) {
     }
 
     private var favoritesPlaylistId: String? = null
+    private val json = Json { ignoreUnknownKeys = true }
 
     /**
      * 获取或创建收藏歌单ID
      */
-    suspend fun getOrCreateFavoritesPlaylistId(): String = withContext(Dispatchers.IO) {
+    suspend fun getOrCreateFavoritesPlaylistId(): String = withContext(Dispatchers.Default) {
         favoritesPlaylistId?.let { return@withContext it }
 
         // 查找是否已有收藏歌单
@@ -37,8 +41,8 @@ class FavoritesRepository(private val database: NekoDatabase) {
         }
 
         // 创建新的收藏歌单
-        val id = "${FAVORITES_PLAYLIST_ID_PREFIX}${System.currentTimeMillis()}"
-        val now = System.currentTimeMillis()
+        val id = "${FAVORITES_PLAYLIST_ID_PREFIX}${currentTimeMillis()}_${randomString(8)}"
+        val now = currentTimeMillis()
         database.playlistQueries.insert(
             id = id,
             name = FAVORITES_PLAYLIST_NAME,
@@ -53,7 +57,7 @@ class FavoritesRepository(private val database: NekoDatabase) {
     /**
      * 检查歌曲是否已收藏
      */
-    suspend fun isFavorite(songId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun isFavorite(songId: String): Boolean = withContext(Dispatchers.Default) {
         val playlistId = getOrCreateFavoritesPlaylistId()
         database.playlistSongQueries.isSongInPlaylist(playlistId, songId).executeAsOne() > 0
     }
@@ -62,7 +66,7 @@ class FavoritesRepository(private val database: NekoDatabase) {
      * 添加/取消收藏
      * @return 操作后的收藏状态（true=已收藏, false=未收藏）
      */
-    suspend fun toggleFavorite(song: Song): Boolean = withContext(Dispatchers.IO) {
+    suspend fun toggleFavorite(song: Song): Boolean = withContext(Dispatchers.Default) {
         val playlistId = getOrCreateFavoritesPlaylistId()
         val exists = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne() > 0
 
@@ -73,13 +77,12 @@ class FavoritesRepository(private val database: NekoDatabase) {
         } else {
             // 添加收藏
             val maxOrder = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull() ?: 0L
-            val json = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
             database.playlistSongQueries.insert(
-                id = java.util.UUID.randomUUID().toString(),
+                id = generateId(),
                 playlistId = playlistId,
                 songId = song.id,
-                songJson = json.encodeToString(Song.serializer(), song),
-                addedAt = System.currentTimeMillis(),
+                songJson = json.encodeToString(song),
+                addedAt = currentTimeMillis(),
                 order = maxOrder + 1
             )
             // 更新歌单时间
@@ -87,7 +90,7 @@ class FavoritesRepository(private val database: NekoDatabase) {
             database.playlistQueries.update(
                 name = playlist.name,
                 coverUrl = playlist.coverUrl,
-                updatedAt = System.currentTimeMillis(),
+                updatedAt = currentTimeMillis(),
                 id = playlistId
             )
             true
@@ -97,7 +100,7 @@ class FavoritesRepository(private val database: NekoDatabase) {
     /**
      * 添加收藏（如果未收藏）
      */
-    suspend fun addToFavorites(song: Song): Boolean = withContext(Dispatchers.IO) {
+    suspend fun addToFavorites(song: Song): Boolean = withContext(Dispatchers.Default) {
         if (isFavorite(song.id)) return@withContext false
         toggleFavorite(song)
         true
@@ -115,6 +118,17 @@ class FavoritesRepository(private val database: NekoDatabase) {
      */
     fun getFavoritesCountFlow(): Flow<Long> = flow {
         val playlistId = getOrCreateFavoritesPlaylistId()
-        database.playlistSongQueries.getSongCountByPlaylist(playlistId).executeAsOne()
-    }.flowOn(Dispatchers.IO)
+        emit(database.playlistSongQueries.getSongCountByPlaylist(playlistId).executeAsOne())
+    }.flowOn(Dispatchers.Default)
+
+    private fun generateId(): String {
+        return "${currentTimeMillis()}_${randomString(8)}"
+    }
+
+    private fun randomString(length: Int): String {
+        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return (1..length)
+            .map { chars.random() }
+            .joinToString("")
+    }
 }
