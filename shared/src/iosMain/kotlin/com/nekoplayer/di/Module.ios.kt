@@ -11,19 +11,19 @@ import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.QueueManager
 import com.nekoplayer.ui.viewmodel.SearchViewModel
 import com.russhwolf.settings.Settings
-import io.ktor.client.engine.okhttp.*
+import io.ktor.client.engine.darwin.*
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /**
- * Android平台Koin模块
+ * iOS平台Koin模块
  */
-val androidModule = module {
+val iosModule = module {
     // Settings
     single { Settings() }
     
     // Database
-    single { DriverFactory(get()).createDriver() }
+    single { DriverFactory().createDriver() }
     single { NekoDatabase(get()) }
     
     // Repository
@@ -31,9 +31,9 @@ val androidModule = module {
     single { PlaylistRepository(get()) }
     
     // API
-    single { BilibiliApi(OkHttp.create()) }
-    single { BiliLoginApi(OkHttp.create()) }
-    single { MiguApi(OkHttp.create()) }
+    single { BilibiliApi(Darwin.create()) }
+    single { BiliLoginApi(Darwin.create()) }
+    single { MiguApi(Darwin.create()) }
     
     // ViewModel - 使用single让搜索状态在页面间保持
     single { SearchViewModel(get()) }
@@ -46,6 +46,6 @@ val androidModule = module {
 }
 
 /**
- * Android平台Koin模块（actual实现）
+ * iOS平台Koin模块（actual实现）
  */
-actual fun platformModule(): Module = androidModule
+actual fun platformModule(): Module = iosModule
