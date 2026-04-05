@@ -135,6 +135,8 @@ actual class AudioPlayer {
         exoPlayer?.stop()
         stopPositionUpdates()
         _playerState.value = PlayerState.Idle
+        // 释放播放器资源，下次播放时重新创建
+        release()
     }
     
     actual fun seekTo(position: Long) {

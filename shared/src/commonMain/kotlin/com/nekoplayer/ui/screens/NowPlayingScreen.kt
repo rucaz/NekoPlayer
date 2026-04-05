@@ -3,6 +3,7 @@ package com.nekoplayer.ui.screens
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -28,7 +29,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import kotlin.math.PI
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
@@ -125,13 +128,41 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                         .fillMaxSize()
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
-                    // 顶部导航栏
-                    TopBar(
-                        onBack = { navigator.pop() },
-                        onQueueClick = { navigator.push(NowPlayingQueueScreen()) }
-                    )
+                    // 顶部导航栏 - 移除标题，只保留返回和队列按钮
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        GlassButton(
+                            onClick = { navigator.pop() },
+                            icon = Icons.Default.ArrowBack,
+                            contentDescription = "返回"
+                        )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                        Row {
+                            GlassButton(
+                                onClick = { navigator.push(NowPlayingQueueScreen()) },
+                                icon = Icons.Default.List,
+                                contentDescription = "播放队列"
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            val playMode by queueManager.playMode.collectAsState()
+                            GlassButton(
+                                onClick = { queueManager.togglePlayMode() },
+                                icon = when (playMode) {
+                                    QueueManager.PlayMode.SEQUENTIAL -> Icons.Default.Repeat
+                                    QueueManager.PlayMode.SHUFFLE -> Icons.Default.Shuffle
+                                    QueueManager.PlayMode.REPEAT_ONE -> Icons.Default.RepeatOne
+                                },
+                                contentDescription = "播放模式"
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
 
                     // 主内容区 - 左右布局
                     Row(
@@ -144,6 +175,7 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                         CoverSection(
                             song = song,
                             isPlaying = playerState is PlayerState.Playing,
+                            waveformData = waveformData,
                             modifier = Modifier.weight(1.2f)
                         )
 
@@ -230,54 +262,69 @@ private fun TopBar(onBack: () -> Unit, onQueueClick: () -> Unit) {
 private fun CoverSection(
     song: Song,
     isPlaying: Boolean,
+    waveformData: List<Float>,
     modifier: Modifier = Modifier
 ) {
     Box(
         modifier = modifier.fillMaxHeight(),
         contentAlignment = Alignment.Center
     ) {
-        // 旋转装饰环
-        if (isPlaying) {
-            val infiniteTransition = rememberInfiniteTransition()
-            val rotation by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 360f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(20000, easing = LinearEasing),
-                    repeatMode = RepeatMode.Restart
-                )
+        // 始终旋转的装饰环（科技感更强）
+        val infiniteTransition = rememberInfiniteTransition()
+        val rotation by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(if (isPlaying) 8000 else 20000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
             )
+        )
 
+        // 外圈频谱环（仅在播放时显示）
+        if (isPlaying) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.95f)
+                    .fillMaxWidth(0.98f)
                     .aspectRatio(1f)
-                    .rotate(rotation)
             ) {
-                // 外圈装饰
                 Canvas(modifier = Modifier.fillMaxSize()) {
-                    drawCircle(
-                        color = Color(0xFF00D4FF).copy(alpha = 0.3f),
-                        style = Stroke(width = 2.dp.toPx()),
-                        radius = size.minDimension / 2 - 4.dp.toPx()
-                    )
+                    val centerX = size.width / 2
+                    val centerY = size.height / 2
+                    val baseRadius = size.minDimension / 2 - 4.dp.toPx()
+                    val barCount = 60
+                    val step = 360f / barCount
 
-                    // 刻度线
-                    for (i in 0 until 60 step 5) {
-                        val angle = (i * 6.0 - 90) * kotlin.math.PI / 180.0
-                        val startRadius = size.minDimension / 2 - 16.dp.toPx()
-                        val endRadius = size.minDimension / 2 - 8.dp.toPx()
+                    val displayData = if (waveformData.all { it == 0f }) {
+                        List(barCount) { 0.3f }
+                    } else {
+                        waveformData.map { ((it + 1f) / 2f).coerceIn(0.1f, 1f) }
+                    }
+
+                    for (i in 0 until barCount) {
+                        val dataIndex = (i * displayData.size / barCount).coerceIn(0, displayData.size - 1)
+                        val amplitude = displayData[dataIndex]
+                        val barLength = 20.dp.toPx() * amplitude
+
+                        val angle = (i * step - 90) * PI / 180.0
+                        val cosA = cos(angle).toFloat()
+                        val sinA = sin(angle).toFloat()
+
+                        val startX = centerX + cosA * baseRadius
+                        val startY = centerY + sinA * baseRadius
+                        val endX = centerX + cosA * (baseRadius + barLength)
+                        val endY = centerY + sinA * (baseRadius + barLength)
 
                         drawLine(
-                            color = Color(0xFF00D4FF).copy(alpha = 0.5f),
-                            start = Offset(
-                                center.x + kotlin.math.cos(angle).toFloat() * startRadius,
-                                center.y + kotlin.math.sin(angle).toFloat() * startRadius
+                            brush = Brush.linearGradient(
+                                colors = listOf(
+                                    Color(0xFF00D4FF).copy(alpha = 0.9f),
+                                    Color(0xFF9C27B0).copy(alpha = 0.7f)
+                                ),
+                                start = Offset(startX, startY),
+                                end = Offset(endX, endY)
                             ),
-                            end = Offset(
-                                center.x + kotlin.math.cos(angle).toFloat() * endRadius,
-                                center.y + kotlin.math.sin(angle).toFloat() * endRadius
-                            ),
+                            start = Offset(startX, startY),
+                            end = Offset(endX, endY),
                             strokeWidth = 2.dp.toPx()
                         )
                     }
@@ -285,19 +332,88 @@ private fun CoverSection(
             }
         }
 
-        // 封面图片 - 带发光效果
+        // 旋转的装饰环
         Box(
             modifier = Modifier
-                .fillMaxWidth(0.75f)
+                .fillMaxWidth(0.9f)
                 .aspectRatio(1f)
-                .clip(RoundedCornerShape(20.dp))
-                .background(Color(0xFF1A1A2F))
+                .rotate(rotation)
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                // 外圈霓虹环
+                drawCircle(
+                    brush = Brush.sweepGradient(
+                        colors = listOf(
+                            Color(0xFF00D4FF).copy(alpha = 0.8f),
+                            Color(0xFF9C27B0).copy(alpha = 0.6f),
+                            Color(0xFF00D4FF).copy(alpha = 0.8f)
+                        ),
+                        center = center
+                    ),
+                    style = Stroke(width = 3.dp.toPx()),
+                    radius = size.minDimension / 2 - 4.dp.toPx()
+                )
+
+                // 内圈虚线
+                drawCircle(
+                    color = Color(0xFF00D4FF).copy(alpha = 0.4f),
+                    style = Stroke(width = 1.dp.toPx()),
+                    radius = size.minDimension / 2 - 20.dp.toPx()
+                )
+
+                // 科技刻度
+                for (i in 0 until 24) {
+                    val angle = (i * 15.0 - 90) * PI / 180.0
+                    val isMajor = i % 6 == 0
+                    val startRadius = size.minDimension / 2 - (if (isMajor) 16.dp.toPx() else 12.dp.toPx())
+                    val endRadius = size.minDimension / 2 - 8.dp.toPx()
+
+                    drawLine(
+                        color = if (isMajor) Color(0xFF00D4FF).copy(alpha = 0.8f) else Color(0xFF00D4FF).copy(alpha = 0.4f),
+                        start = Offset(
+                            center.x + cos(angle).toFloat() * startRadius,
+                            center.y + sin(angle).toFloat() * startRadius
+                        ),
+                        end = Offset(
+                            center.x + cos(angle).toFloat() * endRadius,
+                            center.y + sin(angle).toFloat() * endRadius
+                        ),
+                        strokeWidth = if (isMajor) 3.dp.toPx() else 1.5f.dp.toPx()
+                    )
+                }
+            }
+        }
+
+        // 封面图片 - 不强求正方形，带发光效果
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.65f)
+                .fillMaxHeight(0.7f)
+                .clip(RoundedCornerShape(16.dp))
+                .background(Color(0xFF1A1A2F)),
+            contentAlignment = Alignment.Center
         ) {
             AsyncImage(
                 model = song.coverUrl,
                 contentDescription = song.title,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
+            )
+
+            // 霓虹边框
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .border(
+                        width = 2.dp,
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF00D4FF).copy(alpha = 0.6f),
+                                Color(0xFF9C27B0).copy(alpha = 0.4f)
+                            )
+                        ),
+                        shape = RoundedCornerShape(16.dp)
+                    )
             )
 
             // 内阴影效果
@@ -308,7 +424,7 @@ private fun CoverSection(
                         Brush.radialGradient(
                             colors = listOf(
                                 Color.Transparent,
-                                Color.Black.copy(alpha = 0.3f)
+                                Color.Black.copy(alpha = 0.4f)
                             ),
                             radius = 0.8f
                         )
@@ -331,15 +447,15 @@ private fun ControlPanel(
 ) {
     Column(
         modifier = modifier.fillMaxHeight(),
-        verticalArrangement = Arrangement.SpaceEvenly
+        verticalArrangement = Arrangement.Top
     ) {
-        // ========== 模块1：歌曲信息卡片 ==========
+        // ========== 模块1：歌曲信息卡片（放在最上面）==========
         GlassCard {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = song.title,
                     color = Color.White,
-                    fontSize = 22.sp,
+                    fontSize = 24.sp,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -348,32 +464,58 @@ private fun ControlPanel(
 
                 Text(
                     text = song.artist,
-                    color = Color.White.copy(alpha = 0.6f),
-                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    fontSize = 16.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        // ========== 模块2：波形可视化 ==========
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ========== 模块2：波形可视化（高度2倍）==========
         GlassCard {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "AUDIO VISUALIZER",
-                    color = Color(0xFF00D4FF).copy(alpha = 0.7f),
-                    fontSize = 10.sp,
-                    modifier = Modifier.padding(bottom = 12.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "AUDIO VISUALIZER",
+                        color = Color(0xFF00D4FF).copy(alpha = 0.7f),
+                        fontSize = 10.sp
+                    )
+                    
+                    // 实时峰值指示
+                    val peakValue = if (waveformData.isNotEmpty()) {
+                        waveformData.maxOf { kotlin.math.abs(it) }
+                    } else 0f
+                    
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(
+                                if (peakValue > 0.5f) Color(0xFF00D4FF).copy(alpha = 0.9f)
+                                else Color(0xFF00D4FF).copy(alpha = 0.3f)
+                            )
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 WaveformVisualizer(
                     waveformData = waveformData,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(60.dp)
+                        .height(120.dp)  // 2倍高度
                 )
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
 
         // ========== 模块3：进度控制 ==========
         GlassCard {
@@ -395,16 +537,20 @@ private fun ControlPanel(
                     Text(
                         text = formatTime(currentPosition),
                         color = Color(0xFF00D4FF),
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
                     Text(
                         text = formatTime(duration),
                         color = Color.White.copy(alpha = 0.5f),
-                        fontSize = 12.sp
+                        fontSize = 12.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
                 }
             }
         }
+
+        Spacer(modifier = Modifier.weight(1f))
 
         // ========== 模块4：播放控制 ==========
         Row(
@@ -416,7 +562,7 @@ private fun ControlPanel(
             ControlButton(
                 onClick = { player.playPrevious() },
                 icon = Icons.Default.SkipPrevious,
-                size = 48.dp
+                size = 56.dp
             )
 
             // 播放/暂停
@@ -432,7 +578,7 @@ private fun ControlPanel(
             ControlButton(
                 onClick = { player.playNext() },
                 icon = Icons.Default.SkipNext,
-                size = 48.dp
+                size = 56.dp
             )
         }
     }
@@ -655,50 +801,72 @@ private fun WaveformVisualizer(
     waveformData: List<Float>,
     modifier: Modifier = Modifier
 ) {
-    val displayData = if (waveformData.all { it == 0f }) {
-        List(32) { index ->
-            val infiniteTransition = rememberInfiniteTransition()
-            val value by infiniteTransition.animateFloat(
-                initialValue = 0.2f,
-                targetValue = 0.6f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(400 + index * 20, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
-                )
-            )
-            value
+    // 使用更自然的频谱动画
+    val barCount = 24
+    val animatedValues = List(barCount) { index ->
+        val infiniteTransition = rememberInfiniteTransition()
+        
+        // 如果有真实数据，使用数据驱动
+        val baseValue = if (waveformData.isNotEmpty() && !waveformData.all { it == 0f }) {
+            val dataIndex = (index * waveformData.size / barCount).coerceIn(0, waveformData.size - 1)
+            ((waveformData[dataIndex] + 1f) / 2f).coerceIn(0.2f, 1f)
+        } else {
+            0.3f
         }
-    } else {
-        waveformData.map { (it + 1f) / 2f }
+        
+        // 添加动态波动
+        val animatedValue by infiniteTransition.animateFloat(
+            initialValue = baseValue * 0.5f,
+            targetValue = baseValue,
+            animationSpec = infiniteRepeatable(
+                animation = tween(
+                    durationMillis = 300 + (index % 5) * 80,
+                    easing = FastOutSlowInEasing
+                ),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+        animatedValue
     }
 
     Canvas(modifier = modifier) {
-        val barCount = 20
-        val barWidth = size.width / (barCount * 1.8f)
-        val gap = barWidth * 0.8f
-
-        val step = displayData.size / barCount
+        val barWidth = size.width / (barCount * 1.5f)
+        val gap = barWidth * 0.5f
+        val totalWidth = barCount * (barWidth + gap)
+        val startX = (size.width - totalWidth) / 2
 
         for (i in 0 until barCount) {
-            val dataIndex = (i * step).coerceIn(0, displayData.size - 1)
-            val amplitude = displayData[dataIndex].coerceIn(0.1f, 1f)
-
-            val barHeight = size.height * amplitude
-            val x = i * (barWidth + gap) + (size.width - barCount * (barWidth + gap)) / 2
+            val amplitude = animatedValues[i].coerceIn(0.1f, 1f)
+            // 放大高度变化范围
+            val barHeight = size.height * (0.15f + amplitude * 0.85f)
+            
+            val x = startX + i * (barWidth + gap)
             val y = (size.height - barHeight) / 2
 
-            // 圆角条形
-            drawRoundRect(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF00D4FF).copy(alpha = 0.9f),
-                        Color(0xFF9C27B0).copy(alpha = 0.7f)
-                    ),
-                    startY = y,
-                    endY = y + barHeight
+            // 更科技感的渐变色
+            val gradientBrush = Brush.verticalGradient(
+                colors = listOf(
+                    Color(0xFF00FFFF).copy(alpha = 0.95f),  // 青色
+                    Color(0xFF00D4FF).copy(alpha = 0.8f),   // 蓝色
+                    Color(0xFF9C27B0).copy(alpha = 0.6f)    // 紫色
                 ),
+                startY = y,
+                endY = y + barHeight
+            )
+
+            // 绘制发光效果的条形
+            drawRoundRect(
+                brush = gradientBrush,
                 topLeft = Offset(x, y),
                 size = Size(barWidth, barHeight),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2, barWidth / 2)
+            )
+            
+            // 添加顶部高光
+            drawRoundRect(
+                color = Color(0xFF00FFFF).copy(alpha = 0.6f),
+                topLeft = Offset(x, y),
+                size = Size(barWidth, barWidth),
                 cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2, barWidth / 2)
             )
         }
