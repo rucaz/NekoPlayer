@@ -219,18 +219,32 @@ actual class AudioPlayer {
     private fun setupVisualizer(audioSessionId: Int) {
         if (audioSessionId == 0) return
         
+        // 先释放旧的 visualizer
+        try {
+            visualizer?.enabled = false
+            visualizer?.release()
+            visualizer = null
+        } catch (_: Exception) {}
+        
         try {
             visualizer = Visualizer(audioSessionId).apply {
-                captureSize = Visualizer.getCaptureSizeRange()[1]
+                // 设置捕获大小（使用支持的最大值）
+                val captureSizeRange = Visualizer.getCaptureSizeRange()
+                captureSize = captureSizeRange[1].coerceIn(captureSizeRange[0], captureSizeRange[1])
+                
                 setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(
                         visualizer: Visualizer,
                         waveform: ByteArray,
                         samplingRate: Int
                     ) {
-                        // 将波形数据转换为Float（-1到1）
-                        val data = waveform.map { (it.toInt() and 0xFF) / 128f - 1f }
-                        _waveformData.value = data.take(64)
+                        // 将波形数据转换为 Float（-1 到 1）
+                        // Visualizer 返回的是 8-bit PCM 数据，范围 -128 到 127
+                        val data = waveform.map { byte ->
+                            // 转换为有符号值 (-128 to 127)，然后归一化到 (-1 to 1)
+                            (byte.toInt()).toFloat() / 128f
+                        }
+                        _waveformData.value = data
                     }
                     
                     override fun onFftDataCapture(
@@ -238,13 +252,15 @@ actual class AudioPlayer {
                         fft: ByteArray,
                         samplingRate: Int
                     ) {
-                        // FFT数据用于频谱显示
+                        // FFT 数据暂时不使用
                     }
                 }, Visualizer.getMaxCaptureRate() / 2, true, false)
+                
                 enabled = true
             }
         } catch (e: Exception) {
-            // Visualizer可能不支持，忽略错误
+            // Visualizer 可能不支持某些设备，使用模拟数据
+            _waveformData.value = List(64) { 0f }
         }
     }
 }

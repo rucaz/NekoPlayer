@@ -305,6 +305,20 @@ private fun CoverSection(
                     .fillMaxWidth(0.98f)
                     .aspectRatio(1f)
             ) {
+                // 使用真实音频数据或模拟的呼吸效果
+                val hasRealData = waveformData.any { kotlin.math.abs(it) > 0.01f }
+                
+                // 如果没有真实数据，使用呼吸动画
+                val breathingAnim = rememberInfiniteTransition()
+                val breathValue by breathingAnim.animateFloat(
+                    initialValue = 0.2f,
+                    targetValue = 0.4f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1000, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    )
+                )
+
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     val centerX = size.width / 2
                     val centerY = size.height / 2
@@ -312,15 +326,20 @@ private fun CoverSection(
                     val barCount = 60
                     val step = 360f / barCount
 
-                    val displayData = if (waveformData.all { it == 0f }) {
-                        List(barCount) { 0.3f }
-                    } else {
-                        waveformData.map { ((it + 1f) / 2f).coerceIn(0.1f, 1f) }
-                    }
-
                     for (i in 0 until barCount) {
-                        val dataIndex = (i * displayData.size / barCount).coerceIn(0, displayData.size - 1)
-                        val amplitude = displayData[dataIndex]
+                        // 根据是否有真实数据选择显示方式
+                        val amplitude = if (hasRealData) {
+                            // 使用真实音频数据
+                            val dataIndex = (i * waveformData.size / barCount).coerceIn(0, waveformData.size - 1)
+                            val rawValue = waveformData[dataIndex]
+                            // 将 -1~1 映射到 0.1~1.0
+                            ((rawValue + 1f) / 2f).coerceIn(0.1f, 1f)
+                        } else {
+                            // 使用呼吸动画 + 位置偏移产生波浪感
+                            val offset = i.toFloat() / barCount
+                            (breathValue + sin((offset * 4.0 * PI).toFloat()) * 0.1f).coerceIn(0.15f, 0.5f)
+                        }
+                        
                         val barLength = 20.dp.toPx() * amplitude
 
                         val angle = (i * step - 90) * PI / 180.0
@@ -332,18 +351,21 @@ private fun CoverSection(
                         val endX = centerX + cosA * (baseRadius + barLength)
                         val endY = centerY + sinA * (baseRadius + barLength)
 
+                        // 真实数据时使用更亮的颜色
+                        val alpha = if (hasRealData) 0.9f else 0.5f
+                        
                         drawLine(
                             brush = Brush.linearGradient(
                                 colors = listOf(
-                                    Color(0xFF00D4FF).copy(alpha = 0.9f),
-                                    Color(0xFF9C27B0).copy(alpha = 0.7f)
+                                    Color(0xFF00D4FF).copy(alpha = alpha),
+                                    Color(0xFF9C27B0).copy(alpha = alpha * 0.7f)
                                 ),
                                 start = Offset(startX, startY),
                                 end = Offset(endX, endY)
                             ),
                             start = Offset(startX, startY),
                             end = Offset(endX, endY),
-                            strokeWidth = 2.dp.toPx()
+                            strokeWidth = if (hasRealData) 2.5.dp.toPx() else 1.5f.dp.toPx()
                         )
                     }
                 }
