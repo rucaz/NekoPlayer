@@ -11,6 +11,7 @@ import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.QueueManager
 import com.nekoplayer.ui.viewmodel.SearchViewModel
 import com.russhwolf.settings.Settings
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.darwin.*
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -21,26 +22,29 @@ import org.koin.dsl.module
 val iosModule = module {
     // Settings
     single { Settings() }
-    
+
     // Database
     single { DriverFactory().createDriver() }
     single { NekoDatabase(get()) }
-    
+
     // Repository
     single { UserRepository(get()) }
     single { PlaylistRepository(get()) }
-    
+
+    // HTTP Engine
+    single<HttpClientEngine> { Darwin.create() }
+
     // API
-    single { BilibiliApi(Darwin.create()) }
-    single { BiliLoginApi(Darwin.create()) }
-    single { MiguApi(Darwin.create()) }
-    
+    single { BilibiliApi(get()) }
+    single { BiliLoginApi(get()) }
+    single { MiguApi(get()) }
+
     // ViewModel - 使用single让搜索状态在页面间保持
     single { SearchViewModel(get()) }
-    
+
     // Player - 使用single确保全局唯一实例
     single { AudioPlayer() }
-    
+
     // Queue Manager (单例，全局共享)
     single { QueueManager() }
 }

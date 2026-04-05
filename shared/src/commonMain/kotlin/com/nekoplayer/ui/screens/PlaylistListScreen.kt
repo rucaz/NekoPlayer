@@ -27,6 +27,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.nekoplayer.data.repository.PlaylistRepository
 import com.nekoplayer.database.Playlist
+import com.nekoplayer.utils.currentTimeMillis
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -293,7 +294,7 @@ private fun CreatePlaylistDialog(
 }
 
 private fun formatDate(timestamp: Long): String {
-    val now = System.currentTimeMillis()
+    val now = currentTimeMillis()
     val diff = now - timestamp
 
     return when {
@@ -302,8 +303,9 @@ private fun formatDate(timestamp: Long): String {
         diff < 86400000 -> "${diff / 3600000}小时前"
         diff < 604800000 -> "${diff / 86400000}天前"
         else -> {
-            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.getDefault())
-            sdf.format(java.util.Date(timestamp))
+            // 简单格式化日期，不依赖 Java API
+            val daysAgo = diff / 86400000
+            "${daysAgo}天前"
         }
     }
 }

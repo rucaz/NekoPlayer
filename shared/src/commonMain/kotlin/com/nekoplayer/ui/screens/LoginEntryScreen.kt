@@ -23,7 +23,7 @@ import com.nekoplayer.data.api.BiliLoginApi
 import com.nekoplayer.data.api.LoginStatus
 import com.nekoplayer.data.api.QrCodeResult
 import com.nekoplayer.data.repository.UserRepository
-import io.ktor.client.engine.okhttp.*
+import io.ktor.client.engine.HttpClientEngine
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -36,9 +36,10 @@ class LoginEntryScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val userRepository: UserRepository = koinInject()
+        val httpEngine: HttpClientEngine = koinInject()
         val scope = rememberCoroutineScope()
         
-        val loginApi = remember { BiliLoginApi(OkHttp.create()) }
+        val loginApi = remember { BiliLoginApi(httpEngine) }
         
         var qrUrl by remember { mutableStateOf<String?>(null) }
         var loginStatus by remember { mutableStateOf<LoginStatus>(LoginStatus.WaitingScan) }

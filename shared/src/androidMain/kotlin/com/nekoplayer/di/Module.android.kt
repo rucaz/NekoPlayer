@@ -11,6 +11,7 @@ import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.QueueManager
 import com.nekoplayer.ui.viewmodel.SearchViewModel
 import com.russhwolf.settings.Settings
+import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.*
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -30,10 +31,13 @@ val androidModule = module {
     single { UserRepository(get()) }
     single { PlaylistRepository(get()) }
     
+    // HTTP Engine
+    single<HttpClientEngine> { OkHttp.create() }
+    
     // API
-    single { BilibiliApi(OkHttp.create()) }
-    single { BiliLoginApi(OkHttp.create()) }
-    single { MiguApi(OkHttp.create()) }
+    single { BilibiliApi(get()) }
+    single { BiliLoginApi(get()) }
+    single { MiguApi(get()) }
     
     // ViewModel - 使用single让搜索状态在页面间保持
     single { SearchViewModel(get()) }

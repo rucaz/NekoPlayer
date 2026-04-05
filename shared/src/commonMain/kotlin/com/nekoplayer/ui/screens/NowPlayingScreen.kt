@@ -241,7 +241,7 @@ private fun CoverSection(
 
                     // 刻度线
                     for (i in 0 until 60 step 5) {
-                        val angle = Math.toRadians(i * 6.0 - 90)
+                        val angle = (i * 6.0 - 90) * kotlin.math.PI / 180.0
                         val startRadius = size.minDimension / 2 - 16.dp.toPx()
                         val endRadius = size.minDimension / 2 - 8.dp.toPx()
 
@@ -680,5 +680,5 @@ private fun formatTime(ms: Long): String {
     val seconds = (ms / 1000).coerceAtLeast(0)
     val minutes = seconds / 60
     val secs = seconds % 60
-    return "%02d:%02d".format(minutes, secs)
+    return "${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}"
 }

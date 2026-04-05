@@ -1,5 +1,6 @@
 package com.nekoplayer.data.api
 
+import com.nekoplayer.utils.currentTimeMillis
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.engine.*
@@ -52,7 +53,7 @@ class BiliLoginApi(engine: HttpClientEngine) {
      */
     suspend fun getLoginQrCode(): QrCodeResult {
         return try {
-            val timestamp = System.currentTimeMillis()
+            val timestamp = currentTimeMillis()
             val localId = generateLocalId()
             
             val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/generate") {
@@ -82,7 +83,7 @@ class BiliLoginApi(engine: HttpClientEngine) {
      */
     suspend fun pollLoginStatus(qrcodeKey: String): LoginStatus {
         return try {
-            val timestamp = System.currentTimeMillis()
+            val timestamp = currentTimeMillis()
             val response = client.get("https://passport.bilibili.com/x/passport-login/web/qrcode/poll") {
                 parameter("qrcode_key", qrcodeKey)
                 parameter("source", "main-fe-header")

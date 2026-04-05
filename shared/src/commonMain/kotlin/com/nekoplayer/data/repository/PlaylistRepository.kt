@@ -4,6 +4,7 @@ import com.nekoplayer.data.model.Song
 import com.nekoplayer.database.NekoDatabase
 import com.nekoplayer.database.Playlist
 import com.nekoplayer.database.PlaylistSong
+import com.nekoplayer.utils.currentTimeMillis
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -26,21 +27,21 @@ class PlaylistRepository(private val database: NekoDatabase) {
      */
     fun getAllPlaylists(): Flow<List<Playlist>> = flow {
         emit(database.playlistQueries.getAll().executeAsList())
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(Dispatchers.Default)
 
     /**
      * 根据ID获取歌单
      */
-    suspend fun getPlaylistById(id: String): Playlist? = withContext(Dispatchers.IO) {
+    suspend fun getPlaylistById(id: String): Playlist? = withContext(Dispatchers.Default) {
         database.playlistQueries.getById(id).executeAsOneOrNull()
     }
 
     /**
      * 创建歌单
      */
-    suspend fun createPlaylist(name: String, coverUrl: String? = null): String = withContext(Dispatchers.IO) {
+    suspend fun createPlaylist(name: String, coverUrl: String? = null): String = withContext(Dispatchers.Default) {
         val id = generateId()
-        val now = System.currentTimeMillis()
+        val now = getCurrentTimeMillis()
         database.playlistQueries.insert(
             id = id,
             name = name,
@@ -54,11 +55,11 @@ class PlaylistRepository(private val database: NekoDatabase) {
     /**
      * 更新歌单信息
      */
-    suspend fun updatePlaylist(id: String, name: String, coverUrl: String? = null) = withContext(Dispatchers.IO) {
+    suspend fun updatePlaylist(id: String, name: String, coverUrl: String? = null) = withContext(Dispatchers.Default) {
         database.playlistQueries.update(
             name = name,
             coverUrl = coverUrl,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = getCurrentTimeMillis(),
             id = id
         )
     }
@@ -66,10 +67,10 @@ class PlaylistRepository(private val database: NekoDatabase) {
     /**
      * 更新歌单封面
      */
-    suspend fun updatePlaylistCover(id: String, coverUrl: String?) = withContext(Dispatchers.IO) {
+    suspend fun updatePlaylistCover(id: String, coverUrl: String?) = withContext(Dispatchers.Default) {
         database.playlistQueries.updateCover(
             coverUrl = coverUrl,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = getCurrentTimeMillis(),
             id = id
         )
     }
@@ -77,7 +78,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
     /**
      * 删除歌单（关联的歌曲会自动删除，因为有外键约束）
      */
-    suspend fun deletePlaylist(id: String) = withContext(Dispatchers.IO) {
+    suspend fun deletePlaylist(id: String) = withContext(Dispatchers.Default) {
         database.playlistQueries.delete(id)
     }
 
@@ -93,19 +94,19 @@ class PlaylistRepository(private val database: NekoDatabase) {
                 playlistSong to song
             }
         emit(songs)
-    }.flowOn(Dispatchers.IO)
+    }.flowOn(Dispatchers.Default)
 
     /**
      * 获取歌单内歌曲数量
      */
-    suspend fun getSongCountInPlaylist(playlistId: String): Long = withContext(Dispatchers.IO) {
+    suspend fun getSongCountInPlaylist(playlistId: String): Long = withContext(Dispatchers.Default) {
         database.playlistSongQueries.getSongCountByPlaylist(playlistId).executeAsOne()
     }
 
     /**
      * 检查歌曲是否已在歌单中
      */
-    suspend fun isSongInPlaylist(playlistId: String, songId: String): Boolean = withContext(Dispatchers.IO) {
+    suspend fun isSongInPlaylist(playlistId: String, songId: String): Boolean = withContext(Dispatchers.Default) {
         database.playlistSongQueries.isSongInPlaylist(playlistId, songId).executeAsOne() > 0
     }
 
@@ -113,7 +114,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * 添加歌曲到歌单
      * @return 是否成功添加（如果歌曲已存在则返回false）
      */
-    suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.IO) {
+    suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.Default) {
         // 检查是否已存在（在同一事务中）
         val exists = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne() > 0
         if (exists) {
@@ -129,7 +130,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
             playlistId = playlistId,
             songId = song.id,
             songJson = json.encodeToString(song),
-            addedAt = System.currentTimeMillis(),
+            addedAt = getCurrentTimeMillis(),
             order = nextOrder
         )
 
@@ -138,7 +139,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
         database.playlistQueries.update(
             name = playlist.name,
             coverUrl = playlist.coverUrl,
-            updatedAt = System.currentTimeMillis(),
+            updatedAt = getCurrentTimeMillis(),
             id = playlistId
         )
 
@@ -148,27 +149,39 @@ class PlaylistRepository(private val database: NekoDatabase) {
     /**
      * 从歌单删除歌曲
      */
-    suspend fun removeSongFromPlaylist(playlistSongId: String) = withContext(Dispatchers.IO) {
+    suspend fun removeSongFromPlaylist(playlistSongId: String) = withContext(Dispatchers.Default) {
         database.playlistSongQueries.delete(playlistSongId)
     }
 
     /**
      * 根据歌单ID和歌曲ID删除
      */
-    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) = withContext(Dispatchers.IO) {
+    suspend fun removeSongFromPlaylist(playlistId: String, songId: String) = withContext(Dispatchers.Default) {
         database.playlistSongQueries.deleteByPlaylistAndSong(playlistId, songId)
     }
 
     /**
      * 清空歌单所有歌曲
      */
-    suspend fun clearPlaylist(playlistId: String) = withContext(Dispatchers.IO) {
+    suspend fun clearPlaylist(playlistId: String) = withContext(Dispatchers.Default) {
         database.playlistSongQueries.deleteAllByPlaylist(playlistId)
     }
 
     // ==================== 工具方法 ====================
 
     private fun generateId(): String {
-        return java.util.UUID.randomUUID().toString()
+        // 使用 Kotlin 跨平台兼容的方式生成 ID
+        return "${getCurrentTimeMillis()}_${randomString(8)}"
+    }
+
+    private fun getCurrentTimeMillis(): Long {
+        return currentTimeMillis()
+    }
+
+    private fun randomString(length: Int): String {
+        val chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+        return (1..length)
+            .map { chars.random() }
+            .joinToString("")
     }
 }
