@@ -121,8 +121,28 @@ class PlaylistRepository(private val database: NekoDatabase) {
      * @return 是否成功添加（如果歌曲已存在则返回false）
      */
     suspend fun addSongToPlaylist(playlistId: String, song: Song): Boolean = withContext(Dispatchers.Default) {
-        println("[NekoPlaylist] addSongToPlaylist called: playlistId=$playlistId, songId=${song.id}")
+        println("[NekoPlaylist] addSongToPlaylist called: playlistId='$playlistId', songId='${song.id}', title='${song.title}'")
+        
+        // 检查空值
+        if (playlistId.isBlank()) {
+            println("[NekoPlaylist] ERROR: playlistId is blank!")
+            return@withContext false
+        }
+        if (song.id.isBlank()) {
+            println("[NekoPlaylist] ERROR: song.id is blank!")
+            return@withContext false
+        }
+        
         try {
+            // 先验证歌单是否存在
+            println("[NekoPlaylist] Checking if playlist exists...")
+            val playlist = database.playlistQueries.getById(playlistId).executeAsOneOrNull()
+            if (playlist == null) {
+                println("[NekoPlaylist] ERROR: Playlist '$playlistId' not found!")
+                return@withContext false
+            }
+            println("[NekoPlaylist] Playlist found: ${playlist.name}")
+            
             // 检查是否已存在
             println("[NekoPlaylist] Checking if song exists...")
             val count = database.playlistSongQueries.isSongInPlaylist(playlistId, song.id).executeAsOne()
@@ -137,15 +157,29 @@ class PlaylistRepository(private val database: NekoDatabase) {
             // 获取当前最大排序值
             println("[NekoPlaylist] Getting max order...")
             val maxOrderResult = database.playlistSongQueries.getMaxOrder(playlistId).executeAsOneOrNull()
+            println("[NekoPlaylist] maxOrderResult raw: '$maxOrderResult'")
             val maxOrder = maxOrderResult?.toString()?.toLongOrNull() ?: 0L
             val nextOrder = maxOrder + 1L
             println("[NekoPlaylist] Next order: $nextOrder")
 
+            // 序列化歌曲
+            println("[NekoPlaylist] Encoding song to JSON...")
+            val songJson = json.encodeToString(song)
+            println("[NekoPlaylist] JSON length: ${songJson.length}")
+            
+            // 检查 JSON 是否过大（数据库 TEXT 字段限制）
+            if (songJson.length > 1000000) {
+                println("[NekoPlaylist] WARNING: JSON too large, truncating...")
+            }
+            
+            // 生成ID
+            val newId = generateId()
+            println("[NekoPlaylist] Generated id: $newId")
+            
             // 插入歌曲
             println("[NekoPlaylist] Inserting song...")
-            val songJson = json.encodeToString(song)
             database.playlistSongQueries.insert(
-                id = generateId(),
+                id = newId,
                 playlistId = playlistId,
                 songId = song.id,
                 songJson = songJson,
@@ -157,16 +191,13 @@ class PlaylistRepository(private val database: NekoDatabase) {
             // 更新歌单更新时间
             try {
                 println("[NekoPlaylist] Updating playlist timestamp...")
-                val playlist = database.playlistQueries.getById(playlistId).executeAsOneOrNull()
-                if (playlist != null) {
-                    database.playlistQueries.update(
-                        name = playlist.name,
-                        coverUrl = playlist.coverUrl,
-                        updatedAt = getCurrentTimeMillis(),
-                        id = playlistId
-                    )
-                    println("[NekoPlaylist] Playlist timestamp updated")
-                }
+                database.playlistQueries.update(
+                    name = playlist.name,
+                    coverUrl = playlist.coverUrl,
+                    updatedAt = getCurrentTimeMillis(),
+                    id = playlistId
+                )
+                println("[NekoPlaylist] Playlist timestamp updated")
             } catch (e: Exception) {
                 println("[NekoPlaylist] WARNING: Failed to update playlist timestamp: ${e.message}")
                 e.printStackTrace()
@@ -176,6 +207,7 @@ class PlaylistRepository(private val database: NekoDatabase) {
             true
         } catch (e: Exception) {
             println("[NekoPlaylist] ERROR adding song: ${e.message}")
+            println("[NekoPlaylist] Exception type: ${e::class.simpleName}")
             e.printStackTrace()
             false
         }
