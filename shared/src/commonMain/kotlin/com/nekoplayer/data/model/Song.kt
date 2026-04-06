@@ -1,8 +1,11 @@
 package com.nekoplayer.data.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * 统一歌曲模型
  */
+@Serializable
 data class Song(
     val id: String,
     val title: String,
@@ -20,6 +23,7 @@ data class Song(
     val isOfficial: Boolean = false
 )
 
+@Serializable
 enum class MusicSource {
     BILIBILI,
     MIGU
