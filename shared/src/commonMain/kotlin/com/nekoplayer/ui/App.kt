@@ -15,6 +15,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import cafe.adriel.voyager.navigator.Navigator
 import cafe.adriel.voyager.transitions.SlideTransition
+import com.nekoplayer.data.api.BilibiliApi
+import com.nekoplayer.data.api.MiguApi
+import com.nekoplayer.data.model.MusicSource
 import com.nekoplayer.data.repository.PlaybackRepository
 import com.nekoplayer.data.repository.PlaybackStateSaver
 import com.nekoplayer.player.AudioPlayer
@@ -53,14 +56,16 @@ fun App() {
             val player: AudioPlayer = koinInject()
             val queueManager: QueueManager = koinInject()
             val playbackRepository: PlaybackRepository = koinInject()
+            val bilibiliApi: BilibiliApi = koinInject()
+            val miguApi: MiguApi = koinInject()
 
             // 恢复上次播放状态并启动自动保存
             LaunchedEffect(Unit) {
                 player.setQueueManager(queueManager)
-                
+
                 // 延迟一点等待数据库初始化完成
                 delay(500)
-                
+
                 // 加载上次保存的播放状态
                 val restoredState = playbackRepository.loadPlaybackState()
                 restoredState?.let { state ->
@@ -70,16 +75,29 @@ fun App() {
                             .coerceAtLeast(0)
                         queueManager.playQueue(state.queue, currentIndex)
                         queueManager.setPlayMode(state.playMode)
-                        
+
                         // 准备播放（但不自动播放）
                         state.queue.getOrNull(currentIndex)?.let { song ->
-                            player.prepare(song)
-                            // 恢复播放位置
-                            player.seekTo(state.currentPosition)
+                            // 如果 playUrl 为空，尝试获取
+                            val songWithUrl = if (song.playUrl.isNullOrEmpty()) {
+                                try {
+                                    val playUrl = when (song.source) {
+                                        MusicSource.MIGU -> miguApi.getPlayUrl(song.sourceId)
+                                        else -> bilibiliApi.getPlayUrl(song.sourceId)
+                                    }
+                                    playUrl?.let { song.copy(playUrl = it) }
+                                } catch (e: Exception) { null }
+                            } else song
+
+                            if (songWithUrl?.playUrl != null) {
+                                player.prepare(songWithUrl)
+                                // 恢复播放位置
+                                player.seekTo(state.currentPosition)
+                            }
                         }
                     }
                 }
-                
+
                 // 启动自动保存
                 val stateSaver = PlaybackStateSaver(playbackRepository, player, queueManager)
                 stateSaver.start()

@@ -23,10 +23,14 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import com.nekoplayer.data.api.BilibiliApi
+import com.nekoplayer.data.api.MiguApi
+import com.nekoplayer.data.model.MusicSource
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
 import com.nekoplayer.player.QueueManager
+import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
 /**
@@ -40,6 +44,9 @@ class NowPlayingQueueScreen : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val queueManager: QueueManager = koinInject()
         val player: AudioPlayer = koinInject()
+        val bilibiliApi: BilibiliApi = koinInject()
+        val miguApi: MiguApi = koinInject()
+        val scope = rememberCoroutineScope()
 
         val queue by queueManager.currentQueue.collectAsState()
         val currentIndex by queueManager.currentIndex.collectAsState()
@@ -78,9 +85,28 @@ class NowPlayingQueueScreen : Screen {
                                 isPlaying = index == currentIndex,
                                 index = index + 1,
                                 onClick = {
-                                    queueManager.skipToSong(index)
-                                    player.prepare(song)
-                                    player.play()
+                                    scope.launch {
+                                        queueManager.skipToSong(index)
+                                        // 如果 playUrl 为空，先获取
+                                        val songWithUrl = if (song.playUrl.isNullOrEmpty()) {
+                                            try {
+                                                val playUrl = when (song.source) {
+                                                    MusicSource.MIGU -> 
+                                                        miguApi.getPlayUrl(song.sourceId)
+                                                    else -> 
+                                                        bilibiliApi.getPlayUrl(song.sourceId)
+                                                }
+                                                playUrl?.let { song.copy(playUrl = it) }
+                                            } catch (e: Exception) { null }
+                                        } else song
+                                        
+                                        if (songWithUrl?.playUrl.isNullOrEmpty()) {
+                                            return@launch
+                                        }
+                                        
+                                        player.prepare(songWithUrl!!)
+                                        player.play()
+                                    }
                                 },
                                 onRemove = {
                                     queueManager.removeFromQueue(index)

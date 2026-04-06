@@ -38,6 +38,8 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import com.nekoplayer.data.api.BilibiliApi
+import com.nekoplayer.data.api.MiguApi
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
@@ -57,6 +59,8 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
         val navigator = LocalNavigator.currentOrThrow
         val player: AudioPlayer = koinInject()
         val queueManager: QueueManager = koinInject()
+        val bilibiliApi: BilibiliApi = koinInject()
+        val miguApi: MiguApi = koinInject()
 
         // 从 QueueManager 获取当前歌曲，如果没有则使用初始歌曲
         val queueCurrentSong by queueManager.currentSong.collectAsState()
@@ -75,7 +79,25 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                     ?: (playerState as? PlayerState.Paused)?.song
                 
                 if (currentPlayerSong?.id != song.id) {
-                    player.prepare(song)
+                    // 如果 playUrl 为空，先获取
+                    val songWithUrl = if (song.playUrl.isNullOrEmpty()) {
+                        try {
+                            val playUrl = when (song.source) {
+                                com.nekoplayer.data.model.MusicSource.MIGU -> 
+                                    miguApi.getPlayUrl(song.sourceId)
+                                else -> 
+                                    bilibiliApi.getPlayUrl(song.sourceId)
+                            }
+                            playUrl?.let { song.copy(playUrl = it) }
+                        } catch (e: Exception) { null }
+                    } else song
+                    
+                    if (songWithUrl?.playUrl.isNullOrEmpty()) {
+                        // 获取播放链接失败
+                        return@let
+                    }
+                    
+                    player.prepare(songWithUrl!!)
                     delay(300)
                     player.play()
                 }
