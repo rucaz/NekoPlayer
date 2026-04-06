@@ -3,6 +3,7 @@ package com.nekoplayer.di
 import com.nekoplayer.data.api.BiliLoginApi
 import com.nekoplayer.data.api.BilibiliApi
 import com.nekoplayer.data.api.MiguApi
+import com.nekoplayer.data.repository.PlaybackRepository
 import com.nekoplayer.data.repository.PlaylistRepository
 import com.nekoplayer.data.repository.UserRepository
 import com.nekoplayer.database.DriverFactory
