@@ -130,8 +130,8 @@ class PlaylistRepository(private val database: NekoDatabase) {
             val exists = count > 0
             
             if (exists) {
-                println("[NekoPlaylist] Song already exists, returning false")
-                return@withContext false
+                println("[NekoPlaylist] Song already exists, returning true (idempotent)")
+                return@withContext true
             }
 
             // 获取当前最大排序值
