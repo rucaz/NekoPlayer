@@ -47,6 +47,7 @@ fun AddToPlaylistDialog(
     println("[$TAG] Dialog opened for song: ${song.id} - ${song.title}")
 
     val playlists by playlistRepository.getAllPlaylists().collectAsState(initial = emptyList())
+    var isLoading by remember { mutableStateOf(true) }
     var showCreateNew by remember { mutableStateOf(false) }
     var addingPlaylistId by remember { mutableStateOf<String?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
@@ -54,6 +55,7 @@ fun AddToPlaylistDialog(
 
     LaunchedEffect(playlists) {
         println("[$TAG] Loaded ${playlists.size} playlists")
+        isLoading = false
     }
 
     Dialog(onDismissRequest = onDismiss) {
@@ -146,6 +148,28 @@ fun AddToPlaylistDialog(
                     }
 
                     Divider(color = Color.White.copy(alpha = 0.1f))
+                }
+
+                // 显示加载状态
+                if (isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(color = Color(0xFF00D4FF))
+                    }
+                } else if (playlists.isEmpty()) {
+                    Text(
+                        text = "暂无歌单，请新建一个",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(32.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
 
                 // 歌单列表
