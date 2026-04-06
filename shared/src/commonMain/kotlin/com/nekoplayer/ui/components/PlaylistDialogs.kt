@@ -323,10 +323,15 @@ private fun PlaylistSelectItem(
     isAdding: Boolean,
     onClick: () -> Unit
 ) {
+    println("[$TAG] PlaylistSelectItem rendered: ${playlist.name}, isAlreadyAdded=$isAlreadyAdded, isAdding=$isAdding, clickableEnabled=${!isAlreadyAdded && !isAdding}")
+    
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = !isAlreadyAdded && !isAdding, onClick = onClick)
+            .clickable(enabled = !isAlreadyAdded && !isAdding, onClick = {
+                println("[$TAG] clickable onClick triggered for ${playlist.name}")
+                onClick()
+            })
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
