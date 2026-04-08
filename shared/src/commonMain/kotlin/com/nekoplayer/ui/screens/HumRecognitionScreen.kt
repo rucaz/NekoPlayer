@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -23,6 +22,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.nekoplayer.audio.fingerprint.HumRecognizer
+import com.nekoplayer.audio.recorder.AudioRecorder
 import com.nekoplayer.player.QueueManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -31,7 +31,7 @@ import org.koin.compose.koinInject
 /**
  * 哼唱识别页面
  * 
- * 技术验证：端侧实时音频指纹匹配
+ * 技术验证：端侧实时音频指纹匹配 + 实时录音
  */
 class HumRecognitionScreen : Screen {
     
@@ -39,16 +39,20 @@ class HumRecognitionScreen : Screen {
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
         val recognizer: HumRecognizer = koinInject()
+        val recorder: AudioRecorder = koinInject()
         val queueManager: QueueManager = koinInject()
         
         val coroutineScope = rememberCoroutineScope()
         
         // 状态
-        var isRecording by remember { mutableStateOf(false) }
-        var recordingProgress by remember { mutableStateOf(0f) }
+        val recorderState by recorder.state.collectAsState(AudioRecorder.State.IDLE)
+        val durationMs by recorder.durationMs.collectAsState(0L)
         var isRecognizing by remember { mutableStateOf(false) }
         var recognitionResults by remember { mutableStateOf<List<HumRecognizer.RecognitionResult>?>(null) }
         var errorMessage by remember { mutableStateOf<String?>(null) }
+        
+        // 累积的音频数据（用于识别）
+        var recordedAudio by remember { mutableStateOf<MutableList<Short>>(mutableListOf()) }
         
         // 录音动画
         val infiniteTransition = rememberInfiniteTransition()
@@ -61,46 +65,50 @@ class HumRecognitionScreen : Screen {
             )
         )
         
-        // 模拟录音进度（实际应连接真实录音器）
-        LaunchedEffect(isRecording) {
-            if (isRecording) {
-                recordingProgress = 0f
-                while (isRecording && recordingProgress < 1f) {
-                    delay(50)
-                    recordingProgress += 0.01f
-                }
-                if (recordingProgress >= 1f) {
-                    // 自动停止并识别
-                    isRecording = false
-                    isRecognizing = true
-                    
-                    // 模拟识别（实际应使用真实录音数据）
-                    coroutineScope.launch {
-                        delay(1500) // 模拟处理时间
-                        
-                        // 模拟结果
-                        recognitionResults = listOf(
-                            HumRecognizer.RecognitionResult(
-                                songId = "demo_song_1",
-                                confidence = 0.92f,
-                                matchType = HumRecognizer.MatchType.FINGERPRINT
-                            ),
-                            HumRecognizer.RecognitionResult(
-                                songId = "demo_song_2", 
-                                confidence = 0.78f,
-                                matchType = HumRecognizer.MatchType.FINGERPRINT
-                            ),
-                            HumRecognizer.RecognitionResult(
-                                songId = "demo_song_3",
-                                confidence = 0.65f,
-                                matchType = HumRecognizer.MatchType.FINGERPRINT
-                            )
-                        )
-                        isRecognizing = false
-                    }
-                }
+        // 收集实时音频流
+        LaunchedEffect(Unit) {
+            recorder.audioStream.collect { chunk ->
+                // 累积音频数据
+                recordedAudio.addAll(chunk.data.toList())
             }
         }
+        
+        // 监听录音状态
+        LaunchedEffect(recorderState) {
+            when (recorderState) {
+                AudioRecorder.State.STOPPED -> {
+                    // 录音停止，开始识别
+                    if (recordedAudio.isNotEmpty() && !isRecognizing) {
+                        isRecognizing = true
+                        recognitionResults = null
+                        
+                        coroutineScope.launch {
+                            try {
+                                val audioData = recordedAudio.toShortArray()
+                                val results = recognizer.recognize(audioData, topK = 5)
+                                recognitionResults = results
+                            } catch (e: Exception) {
+                                errorMessage = "识别失败: ${e.message}"
+                            } finally {
+                                isRecognizing = false
+                                recordedAudio = mutableListOf()
+                            }
+                        }
+                    }
+                }
+                else -> {}
+            }
+        }
+        
+        // 清理资源
+        DisposableEffect(Unit) {
+            onDispose {
+                recorder.release()
+            }
+        }
+        
+        val isRecording = recorderState == AudioRecorder.State.RECORDING
+        val recordingProgress = (durationMs / 5000f).coerceIn(0f, 1f) // 5秒为100%
         
         Box(
             modifier = Modifier
@@ -119,7 +127,10 @@ class HumRecognitionScreen : Screen {
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    IconButton(onClick = { navigator.pop() }) {
+                    IconButton(onClick = { 
+                        recorder.release()
+                        navigator.pop() 
+                    }) {
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "返回",
@@ -177,12 +188,33 @@ class HumRecognitionScreen : Screen {
                     // 主按钮
                     Button(
                         onClick = {
-                            if (isRecording) {
-                                isRecording = false
-                            } else if (!isRecognizing) {
-                                isRecording = true
-                                recognitionResults = null
-                                errorMessage = null
+                            when (recorderState) {
+                                AudioRecorder.State.IDLE, AudioRecorder.State.STOPPED -> {
+                                    // 开始录音
+                                    recordedAudio = mutableListOf()
+                                    recognitionResults = null
+                                    errorMessage = null
+                                    
+                                    coroutineScope.launch {
+                                        val result = recorder.start(
+                                            AudioRecorder.Config(
+                                                sampleRate = 16000,
+                                                bufferSize = 1024
+                                            )
+                                        )
+                                        if (result.isFailure) {
+                                            errorMessage = result.exceptionOrNull()?.message 
+                                                ?: "录音启动失败"
+                                        }
+                                    }
+                                }
+                                AudioRecorder.State.RECORDING -> {
+                                    // 停止录音
+                                    coroutineScope.launch {
+                                        recorder.stop()
+                                    }
+                                }
+                                else -> {}
                             }
                         },
                         modifier = Modifier.size(120.dp),
@@ -193,7 +225,8 @@ class HumRecognitionScreen : Screen {
                             } else {
                                 Color(0xFF00D4FF)
                             }
-                        )
+                        ),
+                        enabled = !isRecognizing
                     ) {
                         Icon(
                             imageVector = if (isRecording) {
@@ -223,34 +256,62 @@ class HumRecognitionScreen : Screen {
                     textAlign = TextAlign.Center
                 )
                 
+                // 录音时长显示
+                if (durationMs > 0 && recorderState != AudioRecorder.State.STOPPED) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "${durationMs / 1000}.${(durationMs % 1000) / 100}s",
+                        color = Color(0xFF00D4FF),
+                        fontSize = 14.sp
+                    )
+                }
+                
                 Spacer(modifier = Modifier.weight(1f))
                 
-                // 识别结果
+                // 识别中指示器
                 if (isRecognizing) {
                     CircularProgressIndicator(
                         color = Color(0xFF00D4FF),
                         modifier = Modifier.size(48.dp)
                     )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = "正在分析音频指纹...",
+                        color = Color.White.copy(alpha = 0.5f),
+                        fontSize = 14.sp
+                    )
                     Spacer(modifier = Modifier.height(32.dp))
                 }
                 
+                // 识别结果
                 recognitionResults?.let { results ->
                     RecognitionResultsList(
                         results = results,
                         onResultClick = { result ->
-                            // 播放识别结果
                             // TODO: 根据songId获取歌曲并播放
                         }
                     )
                 }
                 
                 errorMessage?.let { error ->
-                    Text(
-                        text = error,
-                        color = Color(0xFFE91E63),
-                        fontSize = 14.sp,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color(0xFFE91E63).copy(alpha = 0.2f)
+                        )
+                    ) {
+                        Text(
+                            text = error,
+                            color = Color(0xFFE91E63),
+                            fontSize = 14.sp,
+                            modifier = Modifier.padding(16.dp),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
                 }
                 
                 Spacer(modifier = Modifier.height(32.dp))
@@ -353,12 +414,12 @@ private fun RecognitionResultItem(
             
             Spacer(modifier = Modifier.width(16.dp))
             
-            // 歌曲信息（简化显示ID）
+            // 歌曲信息
             Column(
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Song ID: ${result.songId}",
+                    text = result.songId,
                     color = Color.White,
                     fontSize = 16.sp,
                     maxLines = 1

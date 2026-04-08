@@ -57,6 +57,9 @@ val androidModule = module {
     single { com.nekoplayer.audio.fingerprint.ChromaprintFingerprinter() }
     single { com.nekoplayer.audio.fingerprint.VectorIndex() }
     single { com.nekoplayer.audio.fingerprint.HumRecognizer(get(), get()) }
+    
+    // Audio Recorder
+    factory { com.nekoplayer.audio.recorder.AndroidAudioRecorder(get()) }
 }
 
 /**
