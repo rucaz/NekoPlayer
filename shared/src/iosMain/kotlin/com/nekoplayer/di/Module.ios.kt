@@ -3,6 +3,8 @@ package com.nekoplayer.di
 import com.nekoplayer.data.api.BiliLoginApi
 import com.nekoplayer.data.api.BilibiliApi
 import com.nekoplayer.data.api.MiguApi
+import com.nekoplayer.data.repository.PlaybackRepository
+import com.nekoplayer.data.repository.PlayHistoryRepository
 import com.nekoplayer.data.repository.PlaylistRepository
 import com.nekoplayer.data.repository.UserRepository
 import com.nekoplayer.database.DriverFactory
@@ -31,6 +33,7 @@ val iosModule = module {
     single { UserRepository(get()) }
     single { PlaylistRepository(get()) }
     single { PlaybackRepository(get()) }
+    single { PlayHistoryRepository(get()) }
 
     // HTTP Engine
     single<HttpClientEngine> { Darwin.create() }
@@ -48,6 +51,20 @@ val iosModule = module {
 
     // Queue Manager (单例，全局共享)
     single { QueueManager() }
+    
+    // Sleep Timer
+    single { com.nekoplayer.player.SleepTimer(get(), org.koin.core.context.GlobalContext.get().get()) }
+    
+    // Play History Tracker
+    single { com.nekoplayer.player.PlayHistoryTracker(get(), get()) }
+    
+    // Audio Fingerprint
+    single { com.nekoplayer.audio.fingerprint.ChromaprintFingerprinter() }
+    single { com.nekoplayer.audio.fingerprint.VectorIndex() }
+    single { com.nekoplayer.audio.fingerprint.HumRecognizer(get(), get()) }
+    
+    // Audio Recorder
+    factory { com.nekoplayer.audio.recorder.IOSAudioRecorder() }
 }
 
 /**

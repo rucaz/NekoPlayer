@@ -1,0 +1,18 @@
+-- 数据库迁移: 添加播放历史表
+-- 版本: 2
+
+CREATE TABLE PlayHistory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    songId TEXT NOT NULL,
+    songJson TEXT NOT NULL,
+    source TEXT NOT NULL,
+    playDuration INTEGER NOT NULL DEFAULT 0,
+    songDuration INTEGER NOT NULL DEFAULT 0,
+    progressPercent INTEGER NOT NULL DEFAULT 0,
+    playedAt INTEGER NOT NULL,
+    playSessionId TEXT
+);
+
+CREATE INDEX idx_playHistory_playedAt ON PlayHistory(playedAt DESC);
+CREATE INDEX idx_playHistory_songId ON PlayHistory(songId);
+CREATE INDEX idx_playHistory_source ON PlayHistory(source);

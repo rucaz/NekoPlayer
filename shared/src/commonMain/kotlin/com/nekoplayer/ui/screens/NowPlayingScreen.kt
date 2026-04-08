@@ -163,6 +163,46 @@ class NowPlayingScreen(private val initialSong: Song? = null) : Screen {
                         )
 
                         Row {
+                            // 睡眠定时器按钮
+                            var showSleepTimer by remember { mutableStateOf(false) }
+                            
+                            val sleepTimer: com.nekoplayer.player.SleepTimer = koinInject()
+                            val timerState by sleepTimer.state.collectAsState()
+                            val remainingMillis by sleepTimer.remainingMillis.collectAsState()
+                            
+                            // 显示定时器状态
+                            val isTimerActive = timerState is com.nekoplayer.player.SleepTimer.TimerState.Running
+                            
+                            Box {
+                                GlassButton(
+                                    onClick = { showSleepTimer = true },
+                                    icon = Icons.Default.Bedtime,
+                                    contentDescription = "睡眠定时",
+                                    tint = if (isTimerActive) Color(0xFF00D4FF) else Color.White
+                                )
+                                
+                                // 定时器激活时显示剩余时间
+                                if (isTimerActive && remainingMillis > 0) {
+                                    Text(
+                                        text = sleepTimer.formatRemainingTime(remainingMillis),
+                                        color = Color(0xFF00D4FF),
+                                        fontSize = 8.sp,
+                                        modifier = Modifier
+                                            .align(Alignment.BottomCenter)
+                                            .offset(y = (-2).dp)
+                                    )
+                                }
+                            }
+                            
+                            if (showSleepTimer) {
+                                SleepTimerDialog(
+                                    timer = sleepTimer,
+                                    onDismiss = { showSleepTimer = false }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(8.dp))
+                            
                             // 添加到歌单按钮
                             var showAddToPlaylist by remember { mutableStateOf(false) }
                             
@@ -748,7 +788,8 @@ private fun GlassCard(content: @Composable () -> Unit) {
 private fun GlassButton(
     onClick: () -> Unit,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
-    contentDescription: String
+    contentDescription: String,
+    tint: Color = Color.White
 ) {
     Box(
         modifier = Modifier
@@ -761,7 +802,7 @@ private fun GlassButton(
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            tint = Color.White,
+            tint = tint,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -1034,4 +1075,109 @@ private fun formatTime(ms: Long): String {
     val minutes = seconds / 60
     val secs = seconds % 60
     return "${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}"
+}
+
+/**
+ * 睡眠定时器弹窗
+ */
+@Composable
+private fun SleepTimerDialog(
+    timer: com.nekoplayer.player.SleepTimer,
+    onDismiss: () -> Unit
+) {
+    val timerState by timer.state.collectAsState()
+    val remainingMillis by timer.remainingMillis.collectAsState()
+    
+    val isRunning = timerState is com.nekoplayer.player.SleepTimer.TimerState.Running
+    val currentMinutes = if (isRunning) {
+        (remainingMillis / 60_000).toInt().coerceAtLeast(1)
+    } else {
+        com.nekoplayer.player.SleepTimer.DEFAULT_OPTION
+    }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "睡眠定时",
+                color = Color.White
+            )
+        },
+        text = {
+            Column {
+                Text(
+                    text = if (isRunning) {
+                        "剩余时间: ${timer.formatRemainingTime(remainingMillis)}"
+                    } else {
+                        "设置自动关闭时间"
+                    },
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // 时间选项
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    com.nekoplayer.player.SleepTimer.OPTIONS.forEach { minutes ->
+                        val isSelected = if (isRunning) {
+                            minutes == currentMinutes || 
+                            (minutes >= currentMinutes && minutes - 15 < currentMinutes)
+                        } else {
+                            minutes == currentMinutes
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .size(56.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (isSelected) Color(0xFF00D4FF).copy(alpha = 0.3f)
+                                    else Color.White.copy(alpha = 0.1f)
+                                )
+                                .clickable {
+                                    timer.setTimer(minutes)
+                                    onDismiss()
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = "$minutes",
+                                    color = if (isSelected) Color(0xFF00D4FF) else Color.White,
+                                    fontSize = 18.sp,
+                                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+                                )
+                                Text(
+                                    text = "分钟",
+                                    color = if (isSelected) Color(0xFF00D4FF).copy(alpha = 0.7f) 
+                                            else Color.White.copy(alpha = 0.5f),
+                                    fontSize = 10.sp
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            if (isRunning) {
+                TextButton(
+                    onClick = {
+                        timer.cancelTimer()
+                        onDismiss()
+                    }
+                ) {
+                    Text("取消定时", color = Color(0xFFE91E63))
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("关闭", color = Color.White.copy(alpha = 0.6f))
+            }
+        },
+        containerColor = Color(0xFF1A1A2F)
+    )
 }
