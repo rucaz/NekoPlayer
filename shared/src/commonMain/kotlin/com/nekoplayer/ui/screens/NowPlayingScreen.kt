@@ -507,6 +507,24 @@ private fun ControlPanel(
     waveformData: List<Float>,
     modifier: Modifier = Modifier
 ) {
+    // 歌词面板显示状态
+    var showLyrics by remember { mutableStateOf(false) }
+    
+    // 模拟歌词数据（实际应从API获取）
+    val lyrics by remember(song.id) {
+        mutableStateOf(
+            com.nekoplayer.lyrics.Lyrics(
+                songId = song.id,
+                source = song.source.name.lowercase(),
+                lines = listOf(
+                    com.nekoplayer.lyrics.LyricLine(0, "暂无歌词"),
+                    com.nekoplayer.lyrics.LyricLine(5000, "点击切换到波形可视化"),
+                    com.nekoplayer.lyrics.LyricLine(10000, "享受音乐~")
+                )
+            )
+        )
+    }
+    
     Column(
         modifier = modifier.fillMaxHeight(),
         verticalArrangement = Arrangement.Top
@@ -536,7 +554,7 @@ private fun ControlPanel(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ========== 模块2：波形可视化（高度2倍）==========
+        // ========== 模块2：波形可视化 / 歌词面板（可切换）==========
         GlassCard {
             Column(modifier = Modifier.padding(16.dp)) {
                 Row(
@@ -545,35 +563,83 @@ private fun ControlPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "AUDIO VISUALIZER",
+                        text = if (showLyrics) "LYRICS" else "AUDIO VISUALIZER",
                         color = Color(0xFF00D4FF).copy(alpha = 0.7f),
                         fontSize = 10.sp
                     )
                     
-                    // 实时峰值指示
-                    val peakValue = if (waveformData.isNotEmpty()) {
-                        waveformData.maxOf { kotlin.math.abs(it) }
-                    } else 0f
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(8.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                if (peakValue > 0.5f) Color(0xFF00D4FF).copy(alpha = 0.9f)
-                                else Color(0xFF00D4FF).copy(alpha = 0.3f)
+                    // 切换按钮
+                    Row {
+                        // 歌词按钮
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (showLyrics) Color(0xFF00D4FF).copy(alpha = 0.3f)
+                                    else Color.White.copy(alpha = 0.1f)
+                                )
+                                .clickable { showLyrics = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "词",
+                                color = if (showLyrics) Color(0xFF00D4FF) else Color.White.copy(alpha = 0.6f),
+                                fontSize = 12.sp
                             )
-                    )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(8.dp))
+                        
+                        // 波形按钮
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(
+                                    if (!showLyrics) Color(0xFF00D4FF).copy(alpha = 0.3f)
+                                    else Color.White.copy(alpha = 0.1f)
+                                )
+                                .clickable { showLyrics = false },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(
+                                        if (!showLyrics) Color(0xFF00D4FF) else Color.White.copy(alpha = 0.6f)
+                                    )
+                            )
+                        }
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                WaveformVisualizer(
-                    waveformData = waveformData,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)  // 2倍高度
-                )
+                if (showLyrics) {
+                    // 歌词面板
+                    val isPlaying = playerState is PlayerState.Playing
+                    com.nekoplayer.ui.components.LyricsPanel(
+                        lyrics = lyrics,
+                        currentTimeMs = currentPosition,
+                        isPlaying = isPlaying,
+                        onLineClick = { timeMs ->
+                            player.seekTo(timeMs)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                    )
+                } else {
+                    // 波形可视化
+                    WaveformVisualizer(
+                        waveformData = waveformData,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp)
+                    )
+                }
             }
         }
 
