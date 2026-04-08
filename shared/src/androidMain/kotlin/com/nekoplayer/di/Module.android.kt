@@ -58,7 +58,7 @@ val androidModule = module {
     single { com.nekoplayer.player.SleepTimer(get(), org.koin.core.context.GlobalContext.get().get()) }
     
     // Play History Tracker
-    single { com.nekoplayer.player.PlayHistoryTracker(get(), get()) }
+    single { com.nekoplayer.player.PlayHistoryTracker(get(), get(), get()) }
     
     // Audio Fingerprint
     single { com.nekoplayer.audio.fingerprint.ChromaprintFingerprinter() }

@@ -2,20 +2,23 @@ package com.nekoplayer.player
 
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.data.repository.PlayHistoryRepository
+import com.nekoplayer.data.repository.StatsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 /**
  * 播放历史追踪器
  * 
- * 监听播放器状态，自动记录播放历史：
+ * 监听播放器状态，自动记录播放历史和统计数据：
  * - 播放进度超过30%时记录
  * - 同一首歌5分钟内不重复记录
  * - 支持播放会话追踪
+ * - 自动更新播放统计（每日/艺术家/歌曲）
  */
 class PlayHistoryTracker(
     private val audioPlayer: AudioPlayer,
-    private val playHistoryRepository: PlayHistoryRepository
+    private val playHistoryRepository: PlayHistoryRepository,
+    private val statsRepository: StatsRepository? = null
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
@@ -140,15 +143,26 @@ class PlayHistoryTracker(
     }
     
     /**
-     * 记录播放历史到数据库
+     * 记录播放历史到数据库（同时更新统计）
      */
     private suspend fun recordPlayHistory(session: PlaySession) {
         try {
+            val playDuration = session.getPlayDuration()
+            val playedAt = System.currentTimeMillis()
+            
+            // 1. 记录播放历史
             playHistoryRepository.recordPlay(
                 song = session.song,
-                playDuration = session.getPlayDuration(),
+                playDuration = playDuration,
                 songDuration = session.songDuration,
                 sessionId = session.sessionId
+            )
+            
+            // 2. 更新播放统计（如果可用）
+            statsRepository?.recordPlay(
+                song = session.song,
+                playDuration = playDuration,
+                playedAt = playedAt
             )
         } catch (e: Exception) {
             // 记录失败不中断播放
