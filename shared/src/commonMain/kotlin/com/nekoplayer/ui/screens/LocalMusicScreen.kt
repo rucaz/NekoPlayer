@@ -31,6 +31,7 @@ import com.nekoplayer.data.model.LocalSong
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.data.repository.LocalMusicRepository
 import com.nekoplayer.player.QueueManager
+import com.nekoplayer.ui.components.AddMultipleToPlaylistDialog
 import com.nekoplayer.ui.components.AddToPlaylistDialog
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
