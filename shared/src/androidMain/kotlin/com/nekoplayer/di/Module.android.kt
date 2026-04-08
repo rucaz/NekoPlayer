@@ -1,6 +1,7 @@
 package com.nekoplayer.di
 
 import com.nekoplayer.data.api.BiliLoginApi
+import com.nekoplayer.data.api.BiliSubtitleApi
 import com.nekoplayer.data.api.BilibiliApi
 import com.nekoplayer.data.api.MiguApi
 import com.nekoplayer.data.repository.PlayHistoryRepository
@@ -43,6 +44,7 @@ val androidModule = module {
     // API
     single { BilibiliApi(get()) }
     single { BiliLoginApi(get()) }
+    single { BiliSubtitleApi(get()) }
     single { MiguApi(get()) }
     
     // ViewModel - 使用single让搜索状态在页面间保持
