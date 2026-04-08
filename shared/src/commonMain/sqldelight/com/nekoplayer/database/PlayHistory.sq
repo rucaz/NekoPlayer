@@ -1,0 +1,107 @@
+-- 播放历史表
+-- 用于记录用户的播放历史，支持生成"最近播放"虚拟歌单
+
+CREATE TABLE PlayHistory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    songId TEXT NOT NULL,
+    songJson TEXT NOT NULL,           -- 歌曲完整信息的JSON序列化
+    source TEXT NOT NULL,             -- 音乐来源 (BILIBILI/MIGU/LOCAL)
+    playDuration INTEGER NOT NULL DEFAULT 0,  -- 实际播放时长(毫秒)
+    songDuration INTEGER NOT NULL DEFAULT 0,  -- 歌曲总时长(毫秒)
+    progressPercent INTEGER NOT NULL DEFAULT 0, -- 播放进度百分比
+    playedAt INTEGER NOT NULL,        -- 播放时间戳(毫秒)
+    
+    -- 去重辅助字段
+    playSessionId TEXT                -- 播放会话ID，同一session内的重复播放不记录
+);
+
+-- 索引：按播放时间倒序查询（最近播放列表）
+CREATE INDEX idx_playHistory_playedAt ON PlayHistory(playedAt DESC);
+
+-- 索引：按歌曲ID查询（某歌曲的播放历史）
+CREATE INDEX idx_playHistory_songId ON PlayHistory(songId);
+
+-- 索引：按来源查询
+CREATE INDEX idx_playHistory_source ON PlayHistory(source);
+
+-- 获取最近播放记录（用于最近播放列表）
+-- 使用子查询去重：同一首歌只取最近的一次播放
+getRecentPlays:
+SELECT * FROM PlayHistory
+WHERE id IN (
+    SELECT MAX(id) FROM PlayHistory
+    GROUP BY songId
+)
+ORDER BY playedAt DESC
+LIMIT ?;
+
+-- 获取所有播放历史（不去重，用于统计）
+getAllHistory:
+SELECT * FROM PlayHistory
+ORDER BY playedAt DESC
+LIMIT ? OFFSET ?;
+
+-- 获取某首歌的播放记录
+getHistoryBySong:
+SELECT * FROM PlayHistory
+WHERE songId = ?
+ORDER BY playedAt DESC;
+
+-- 获取某时间段内的播放记录
+getHistoryByTimeRange:
+SELECT * FROM PlayHistory
+WHERE playedAt >= ? AND playedAt <= ?
+ORDER BY playedAt DESC;
+
+-- 插入播放记录
+insertPlayRecord:
+INSERT INTO PlayHistory(
+    songId, songJson, source, 
+    playDuration, songDuration, progressPercent,
+    playedAt, playSessionId
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- 获取播放次数统计
+getPlayCountStats:
+SELECT 
+    songId,
+    COUNT(*) as playCount,
+    SUM(playDuration) as totalPlayDuration,
+    MAX(playedAt) as lastPlayedAt
+FROM PlayHistory
+GROUP BY songId
+ORDER BY playCount DESC
+LIMIT ?;
+
+-- 获取今日播放统计
+getTodayStats:
+SELECT 
+    COUNT(DISTINCT songId) as uniqueSongs,
+    COUNT(*) as totalPlays,
+    SUM(playDuration) as totalDuration
+FROM PlayHistory
+WHERE playedAt >= ?;
+
+-- 删除单条记录
+deleteById:
+DELETE FROM PlayHistory WHERE id = ?;
+
+-- 删除某首歌的所有记录
+deleteBySong:
+DELETE FROM PlayHistory WHERE songId = ?;
+
+-- 清空所有历史
+clearAll:
+DELETE FROM PlayHistory;
+
+-- 删除N天前的记录（自动清理）
+deleteBefore:
+DELETE FROM PlayHistory WHERE playedAt < ?;
+
+-- 获取记录总数
+getCount:
+SELECT COUNT(*) FROM PlayHistory;
+
+-- 获取去重后的歌曲总数
+getUniqueSongCount:
+SELECT COUNT(DISTINCT songId) FROM PlayHistory;
