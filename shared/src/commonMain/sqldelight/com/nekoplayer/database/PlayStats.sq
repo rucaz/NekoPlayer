@@ -1,0 +1,233 @@
+-- 播放统计表 (PlayStats)
+-- 用于存储按日/按艺术家聚合的播放统计数据
+-- 支持快速查询统计信息，无需实时计算大量历史记录
+
+-- ============================================
+-- 每日播放统计表
+-- ============================================
+CREATE TABLE PlayStatsDaily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,           -- 日期格式: YYYY-MM-DD
+    totalPlays INTEGER NOT NULL DEFAULT 0,      -- 总播放次数
+    uniqueSongs INTEGER NOT NULL DEFAULT 0,     -- 播放的不同歌曲数
+    totalDuration INTEGER NOT NULL DEFAULT 0,   -- 总播放时长(毫秒)
+    
+    -- 按来源统计
+    bilibiliPlays INTEGER NOT NULL DEFAULT 0,
+    miguPlays INTEGER NOT NULL DEFAULT 0,
+    localPlays INTEGER NOT NULL DEFAULT 0,
+    
+    -- 时间分布 (24小时，每小时播放次数)
+    hour00 INTEGER DEFAULT 0, hour01 INTEGER DEFAULT 0,
+    hour02 INTEGER DEFAULT 0, hour03 INTEGER DEFAULT 0,
+    hour04 INTEGER DEFAULT 0, hour05 INTEGER DEFAULT 0,
+    hour06 INTEGER DEFAULT 0, hour07 INTEGER DEFAULT 0,
+    hour08 INTEGER DEFAULT 0, hour09 INTEGER DEFAULT 0,
+    hour10 INTEGER DEFAULT 0, hour11 INTEGER DEFAULT 0,
+    hour12 INTEGER DEFAULT 0, hour13 INTEGER DEFAULT 0,
+    hour14 INTEGER DEFAULT 0, hour15 INTEGER DEFAULT 0,
+    hour16 INTEGER DEFAULT 0, hour17 INTEGER DEFAULT 0,
+    hour18 INTEGER DEFAULT 0, hour19 INTEGER DEFAULT 0,
+    hour20 INTEGER DEFAULT 0, hour21 INTEGER DEFAULT 0,
+    hour22 INTEGER DEFAULT 0, hour23 INTEGER DEFAULT 0,
+    
+    updatedAt INTEGER NOT NULL          -- 更新时间戳
+);
+
+-- 索引：按日期查询
+CREATE INDEX idx_playStatsDaily_date ON PlayStatsDaily(date);
+
+-- 索引：按更新时间查询
+CREATE INDEX idx_playStatsDaily_updatedAt ON PlayStatsDaily(updatedAt);
+
+-- ============================================
+-- 艺术家播放统计表
+-- ============================================
+CREATE TABLE PlayStatsArtist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artistName TEXT NOT NULL UNIQUE,     -- 艺术家名称
+    artistId TEXT,                       -- 艺术家ID（如果有）
+    
+    totalPlays INTEGER NOT NULL DEFAULT 0,      -- 总播放次数
+    totalDuration INTEGER NOT NULL DEFAULT 0,   -- 总播放时长(毫秒)
+    
+    -- 歌曲数量统计
+    uniqueSongs INTEGER NOT NULL DEFAULT 0,     -- 播放过的该艺术家歌曲数
+    
+    -- 时间戳
+    firstPlayedAt INTEGER,               -- 首次播放时间
+    lastPlayedAt INTEGER,                -- 最后播放时间
+    updatedAt INTEGER NOT NULL           -- 更新时间戳
+);
+
+-- 索引：按播放次数排序
+CREATE INDEX idx_playStatsArtist_plays ON PlayStatsArtist(totalPlays DESC);
+
+-- 索引：按播放时长排序
+CREATE INDEX idx_playStatsArtist_duration ON PlayStatsArtist(totalDuration DESC);
+
+-- ============================================
+-- 歌曲播放统计表 (去重统计，补充PlayHistory)
+-- ============================================
+CREATE TABLE PlayStatsSong (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    songId TEXT NOT NULL UNIQUE,         -- 歌曲ID
+    songJson TEXT NOT NULL,              -- 歌曲信息JSON
+    
+    totalPlays INTEGER NOT NULL DEFAULT 0,      -- 总播放次数
+    totalDuration INTEGER NOT NULL DEFAULT 0,   -- 总播放时长(毫秒)
+    
+    -- 时间戳
+    firstPlayedAt INTEGER,               -- 首次播放时间
+    lastPlayedAt INTEGER,                -- 最后播放时间
+    updatedAt INTEGER NOT NULL           -- 更新时间戳
+);
+
+-- 索引
+CREATE INDEX idx_playStatsSong_plays ON PlayStatsSong(totalPlays DESC);
+
+-- ============================================
+-- 查询语句
+-- ============================================
+
+-- 获取某日期统计（如果不存在返回空）
+getDailyStats:
+SELECT * FROM PlayStatsDaily WHERE date = ?;
+
+-- 获取日期范围统计
+getDailyStatsRange:
+SELECT * FROM PlayStatsDaily 
+WHERE date >= ? AND date <= ?
+ORDER BY date DESC;
+
+-- 获取最近N天的统计
+getRecentDailyStats:
+SELECT * FROM PlayStatsDaily 
+ORDER BY date DESC 
+LIMIT ?;
+
+-- 插入或更新每日统计
+upsertDailyStats:
+INSERT INTO PlayStatsDaily(
+    date, totalPlays, uniqueSongs, totalDuration,
+    bilibiliPlays, miguPlays, localPlays,
+    hour00, hour01, hour02, hour03, hour04, hour05,
+    hour06, hour07, hour08, hour09, hour10, hour11,
+    hour12, hour13, hour14, hour15, hour16, hour17,
+    hour18, hour19, hour20, hour21, hour22, hour23,
+    updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, 
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(date) DO UPDATE SET
+    totalPlays = totalPlays + excluded.totalPlays,
+    uniqueSongs = MAX(uniqueSongs, excluded.uniqueSongs),
+    totalDuration = totalDuration + excluded.totalDuration,
+    bilibiliPlays = bilibiliPlays + excluded.bilibiliPlays,
+    miguPlays = miguPlays + excluded.miguPlays,
+    localPlays = localPlays + excluded.localPlays,
+    updatedAt = excluded.updatedAt;
+
+-- 获取艺术家统计
+getArtistStats:
+SELECT * FROM PlayStatsArtist WHERE artistName = ?;
+
+-- 获取Top艺术家（按播放次数）
+getTopArtistsByPlays:
+SELECT * FROM PlayStatsArtist 
+ORDER BY totalPlays DESC 
+LIMIT ?;
+
+-- 获取Top艺术家（按播放时长）
+getTopArtistsByDuration:
+SELECT * FROM PlayStatsArtist 
+ORDER BY totalDuration DESC 
+LIMIT ?;
+
+-- 插入或更新艺术家统计
+upsertArtistStats:
+INSERT INTO PlayStatsArtist(
+    artistName, artistId, totalPlays, totalDuration,
+    uniqueSongs, firstPlayedAt, lastPlayedAt, updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(artistName) DO UPDATE SET
+    totalPlays = totalPlays + excluded.totalPlays,
+    totalDuration = totalDuration + excluded.totalDuration,
+    uniqueSongs = MAX(uniqueSongs, excluded.uniqueSongs),
+    lastPlayedAt = excluded.lastPlayedAt,
+    updatedAt = excluded.updatedAt;
+
+-- 获取歌曲统计
+getSongStats:
+SELECT * FROM PlayStatsSong WHERE songId = ?;
+
+-- 获取Top歌曲
+getTopSongs:
+SELECT * FROM PlayStatsSong 
+ORDER BY totalPlays DESC 
+LIMIT ?;
+
+-- 插入或更新歌曲统计
+upsertSongStats:
+INSERT INTO PlayStatsSong(
+    songId, songJson, totalPlays, totalDuration,
+    firstPlayedAt, lastPlayedAt, updatedAt
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(songId) DO UPDATE SET
+    totalPlays = totalPlays + excluded.totalPlays,
+    totalDuration = totalDuration + excluded.totalDuration,
+    lastPlayedAt = excluded.lastPlayedAt,
+    updatedAt = excluded.updatedAt;
+
+-- ============================================
+-- 聚合查询（用于统计页面）
+-- ============================================
+
+-- 获取总体统计
+getOverallStats:
+SELECT 
+    SUM(totalPlays) as totalPlays,
+    SUM(totalDuration) as totalDuration,
+    COUNT(DISTINCT date) as activeDays
+FROM PlayStatsDaily;
+
+-- 获取本周统计
+getThisWeekStats:
+SELECT 
+    SUM(totalPlays) as totalPlays,
+    SUM(uniqueSongs) as uniqueSongs,
+    SUM(totalDuration) as totalDuration
+FROM PlayStatsDaily
+WHERE date >= date('now', 'weekday 0', '-7 days');
+
+-- 获取本月统计
+getThisMonthStats:
+SELECT 
+    SUM(totalPlays) as totalPlays,
+    SUM(uniqueSongs) as uniqueSongs,
+    SUM(totalDuration) as totalDuration
+FROM PlayStatsDaily
+WHERE date >= date('now', 'start of month');
+
+-- ============================================
+-- 维护操作
+-- ============================================
+
+-- 删除旧数据（保留最近N天）
+deleteOldDailyStats:
+DELETE FROM PlayStatsDaily WHERE date < ?;
+
+deleteOldArtistStats:
+DELETE FROM PlayStatsArtist 
+WHERE updatedAt < ? AND totalPlays < 5;
+
+deleteOldSongStats:
+DELETE FROM PlayStatsSong 
+WHERE updatedAt < ? AND totalPlays < 3;
+
+-- 获取统计表大小
+getTableStats:
+SELECT 
+    (SELECT COUNT(*) FROM PlayStatsDaily) as dailyCount,
+    (SELECT COUNT(*) FROM PlayStatsArtist) as artistCount,
+    (SELECT COUNT(*) FROM PlayStatsSong) as songCount;
