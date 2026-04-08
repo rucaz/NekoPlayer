@@ -16,6 +16,7 @@ import androidx.media.app.NotificationCompat.MediaStyle
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.player.AudioPlayer
 import com.nekoplayer.player.PlayerState
+import com.nekoplayer.player.QueueManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -31,6 +32,7 @@ import org.koin.android.ext.android.inject
 class MusicPlaybackService : Service() {
     
     private val player: AudioPlayer by inject()
+    private val queueManager: QueueManager by inject()
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     
     private var currentSong: Song? = null
@@ -68,8 +70,8 @@ class MusicPlaybackService : Service() {
                 stopForeground(true)
                 stopSelf()
             }
-            ACTION_NEXT -> { /* TODO: 下一首 */ }
-            ACTION_PREV -> { /* TODO: 上一首 */ }
+            ACTION_NEXT -> queueManager.next()
+            ACTION_PREV -> queueManager.previous()
         }
         
         // 启动前台服务
@@ -97,40 +99,60 @@ class MusicPlaybackService : Service() {
      */
     private fun buildNotification(): Notification {
         val song = currentSong
-        
+
+        // 上一首按钮
+        val prevIntent = PendingIntent.getService(
+            this, 0,
+            Intent(this, MusicPlaybackService::class.java).apply {
+                action = ACTION_PREV
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         // 播放/暂停按钮
         val playPauseIntent = PendingIntent.getService(
-            this, 0,
+            this, 1,
             Intent(this, MusicPlaybackService::class.java).apply {
                 action = if (isPlaying) ACTION_PAUSE else ACTION_PLAY
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
+        // 下一首按钮
+        val nextIntent = PendingIntent.getService(
+            this, 2,
+            Intent(this, MusicPlaybackService::class.java).apply {
+                action = ACTION_NEXT
+            },
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
         // 停止按钮
         val stopIntent = PendingIntent.getService(
-            this, 1,
+            this, 3,
             Intent(this, MusicPlaybackService::class.java).apply {
                 action = ACTION_STOP
             },
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(song?.title ?: "NekoPlayer")
             .setContentText(song?.artist ?: "未知艺术家")
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setOngoing(true)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            .addAction(android.R.drawable.ic_media_previous, "上一首", prevIntent)
             .addAction(
-                android.R.drawable.ic_media_pause,
+                if (isPlaying) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
                 if (isPlaying) "暂停" else "播放",
                 playPauseIntent
             )
+            .addAction(android.R.drawable.ic_media_next, "下一首", nextIntent)
             .addAction(android.R.drawable.ic_delete, "停止", stopIntent)
             .setStyle(
                 MediaStyle()
-                    .setShowActionsInCompactView(0, 1)
+                    .setShowActionsInCompactView(0, 1, 2)
             )
             .build()
     }
