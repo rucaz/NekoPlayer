@@ -1,0 +1,421 @@
+# NekoPlayer 全自动开发任务队列系统 (AutoDevQueue)
+
+> 版本: v1.0  
+> 架构: 声明式任务定义 + 智能调度引擎 + 自动化执行  
+> 目标: 零人工干预的任务流转
+
+---
+
+## 1. 系统架构
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        AutoDevQueue 架构                         │
+├─────────────────────────────────────────────────────────────────┤
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │
+│  │   任务定义层  │  │   调度引擎    │  │   执行引擎    │          │
+│  │  (YAML/DSL)  │→ │  (优先级算法) │→ │  (Git+CI/CD) │          │
+│  └──────────────┘  └──────────────┘  └──────────────┘          │
+│         ↓                 ↓                 ↓                   │
+│  ┌──────────────────────────────────────────────────────┐      │
+│  │              状态存储 (Git + SQLite)                  │      │
+│  │   - 任务状态    - 执行日志    - 指标监控               │      │
+│  └──────────────────────────────────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 2. 任务定义格式 (neko-tasks.yml)
+
+```yaml
+# NekoPlayer 全自动开发任务队列
+version: "1.0"
+project: NekoPlayer
+
+# ==================== 全局配置 ====================
+config:
+  # 并行度控制
+  max_parallel: 2
+  
+  # 自动触发规则
+  auto_trigger:
+    on_merge_to_main: true      # main分支合并后自动触发下一批任务
+    on_pr_closed: true          # PR关闭后自动触发
+    on_schedule: "0 9 * * *"    # 每天9点检查待执行任务
+  
+  # 失败重试策略
+  retry:
+    max_attempts: 3
+    backoff: exponential        # linear | exponential
+    
+  # 通知配置
+  notifications:
+    on_complete: [feishu, email]
+    on_block: [feishu]
+
+# ==================== 任务定义 ====================
+tasks:
+  # -------------------------------------------------
+  # v1.1.0 里程碑: 核心体验补齐
+  # -------------------------------------------------
+  
+  - id: LYRICS-001
+    title: "歌词解析器核心实现"
+    module: lyrics
+    priority: 10        # 1-100, 数值越大越优先
+    estimate: 8h
+    assignee: auto      # auto | specific_user
+    milestone: v1.1.0
+    
+    # 任务内容
+    content:
+      type: code
+      specs:
+        - "实现LrcParser.kt，支持标准LRC格式"
+        - "支持时间标签解析 [mm:ss.xx]"
+        - "支持翻译行 [mm:ss.xx] > 格式"
+        - "单元测试覆盖率 > 90%"
+      
+    # 依赖关系
+    dependencies: []
+    
+    # 完成条件
+    criteria:
+      - type: unit_test_pass
+      - type: code_review_approved
+      - type: branch_merged
+        target: develop
+    
+    # 自动触发后续任务
+    triggers:
+      on_complete: [LYRICS-002, LOCAL-001]
+
+  - id: LYRICS-002
+    title: "歌词UI组件开发"
+    module: lyrics
+    priority: 9
+    estimate: 16h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: code
+      specs:
+        - "LyricsPanel Composable组件"
+        - "同步滚动高亮逻辑"
+        - "点击跳转功能"
+        - "NowPlayingScreen集成"
+    
+    dependencies: [LYRICS-001]
+    
+    criteria:
+      - type: ui_test_pass
+      - type: manual_qa
+        checklist: ["滚动流畅", "跳转准确", "无内存泄漏"]
+
+  - id: LOCAL-001
+    title: "Android本地音乐扫描"
+    module: local_music
+    priority: 9
+    estimate: 12h
+    assignee: auto
+    milestone: v1.1.0
+    platform: [android]
+    
+    content:
+      type: code
+      specs:
+        - "MediaStore查询封装"
+        - "权限申请流程 (READ_MEDIA_AUDIO)"
+        - "ID3标签读取"
+        - "LocalMusicRepository实现"
+    
+    dependencies: []
+
+  - id: LOCAL-002
+    title: "iOS本地音乐扫描"
+    module: local_music
+    priority: 9
+    estimate: 12h
+    assignee: auto
+    milestone: v1.1.0
+    platform: [ios]
+    
+    content:
+      type: code
+      specs:
+        - "MPMediaQuery封装"
+        - "权限申请 (NSAppleMusicUsageDescription)"
+        - "ID3标签读取 (AVAsset)"
+        - "LocalMusicRepository iOS实现"
+    
+    dependencies: []
+
+  - id: LOCAL-003
+    title: "本地音乐UI页面"
+    module: local_music
+    priority: 8
+    estimate: 10h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: code
+      specs:
+        - "LocalMusicScreen页面"
+        - "歌曲列表展示"
+        - "扫描按钮 + 刷新逻辑"
+        - "添加到歌单集成"
+    
+    dependencies: [LOCAL-001, LOCAL-002]
+
+  - id: HISTORY-001
+    title: "播放历史数据库设计"
+    module: history
+    priority: 7
+    estimate: 4h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: database
+      specs:
+        - "play_history表定义 (SQLDelight)"
+        - "索引设计"
+        - "数据库迁移脚本"
+
+  - id: HISTORY-002
+    title: "播放历史记录逻辑"
+    module: history
+    priority: 7
+    estimate: 6h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: code
+      specs:
+        - "播放进度监听 (30%阈值)"
+        - "PlayHistoryRepository实现"
+        - "去重逻辑"
+    
+    dependencies: [HISTORY-001]
+
+  - id: HISTORY-003
+    title: "最近播放歌单集成"
+    module: history
+    priority: 6
+    estimate: 6h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: code
+      specs:
+        - "PlaylistListScreen添加最近播放入口"
+        - "虚拟歌单逻辑"
+        - "清空历史功能"
+    
+    dependencies: [HISTORY-002]
+
+  - id: SLEEP-001
+    title: "睡眠定时功能"
+    module: player
+    priority: 6
+    estimate: 8h
+    assignee: auto
+    milestone: v1.1.0
+    
+    content:
+      type: code
+      specs:
+        - "定时器管理"
+        - "NowPlaying菜单集成"
+        - "MiniPlayer状态指示"
+        - "到时自动暂停"
+
+  # -------------------------------------------------
+  # v1.2.0 里程碑: 体验深化
+  # -------------------------------------------------
+  
+  - id: DETAIL-001
+    title: "歌曲详情页设计"
+    module: ui
+    priority: 5
+    estimate: 6h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: design
+      specs:
+        - "Figma设计稿"
+        - "交互流程定义"
+        - "设计评审"
+
+  - id: DETAIL-002
+    title: "歌曲详情页实现"
+    module: ui
+    priority: 5
+    estimate: 12h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: code
+      specs:
+        - "SongDetailScreen实现"
+        - "相关推荐逻辑"
+        - "导航集成"
+    
+    dependencies: [DETAIL-001]
+
+  - id: LYRICS-FX-001
+    title: "歌词动效技术预研"
+    module: lyrics
+    priority: 4
+    estimate: 8h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: research
+      specs:
+        - "Canvas绘制性能测试"
+        - "逐字高亮算法设计"
+        - "原型验证"
+
+  - id: LYRICS-FX-002
+    title: "歌词动效实现"
+    module: lyrics
+    priority: 4
+    estimate: 16h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: code
+      specs:
+        - "逐字高亮动画"
+        - "当前行缩放效果"
+        - "渐变过渡"
+    
+    dependencies: [LYRICS-FX-001, LYRICS-002]
+
+  - id: STATS-001
+    title: "播放统计数据库设计"
+    module: stats
+    priority: 4
+    estimate: 6h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: database
+      specs:
+        - "play_stats_daily表"
+        - "play_stats_artist表"
+        - "预聚合逻辑"
+
+  - id: STATS-002
+    title: "统计Repository实现"
+    module: stats
+    priority: 4
+    estimate: 10h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: code
+      specs:
+        - "StatsRepository接口"
+        - "聚合查询优化"
+        - "缓存策略"
+    
+    dependencies: [STATS-001]
+
+  - id: STATS-003
+    title: "统计页面UI"
+    module: stats
+    priority: 3
+    estimate: 12h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: code
+      specs:
+        - "StatsScreen页面"
+        - "图表组件 (Compose Canvas)"
+        - "分享卡片生成"
+    
+    dependencies: [STATS-002]
+
+  - id: EXPORT-001
+    title: "歌单导入导出功能"
+    module: playlist
+    priority: 3
+    estimate: 10h
+    assignee: auto
+    milestone: v1.2.0
+    
+    content:
+      type: code
+      specs:
+        - "JSON序列化/反序列化"
+        - "文件选择器集成"
+        - "PlaylistListScreen菜单集成"
+
+# ==================== 任务组/批次 ====================
+batches:
+  - name: "v1.1.0-基础构建"
+    tasks: [LYRICS-001, LOCAL-001, LOCAL-002, HISTORY-001]
+    parallel: true
+    
+  - name: "v1.1.0-UI集成"
+    tasks: [LYRICS-002, LOCAL-003, HISTORY-002]
+    depends_on: "v1.1.0-基础构建"
+    
+  - name: "v1.1.0-收尾"
+    tasks: [HISTORY-003, SLEEP-001]
+    depends_on: "v1.1.0-UI集成"
+
+# ==================== 自动化规则 ====================
+rules:
+  # 任务完成后自动创建PR
+  - name: auto_create_pr
+    trigger: task_complete
+    condition: "type == 'code'"
+    action: |
+      git checkout -b feature/{{task.id}}
+      git add .
+      git commit -m "feat({{task.module}}): {{task.title}} [{{task.id}}]"
+      git push origin feature/{{task.id}}
+      gh pr create --title "{{task.id}}: {{task.title}}" --body "{{task.content.specs}}"
+
+  # PR合并后自动更新任务状态
+  - name: auto_update_status_on_merge
+    trigger: pr_merged
+    action: |
+      task_id=$(git log -1 --pretty=%B | grep -oE '[A-Z]+-[0-9]+')
+      neko-queue complete $task_id
+
+  # 每日晨会报告
+  - name: daily_standup_report
+    trigger: schedule
+    cron: "0 9 * * *"
+    action: |
+      echo "📊 今日任务队列状态:"
+      neko-queue status --format=table
+      echo ""
+      echo "🎯 今日待处理高优先级任务:"
+      neko-queue list --priority>=8 --status=pending
+
+  # 任务阻塞自动升级
+  - name: escalate_blocked_tasks
+    trigger: task_blocked
+    condition: "blocked_hours > 24"
+    action: |
+      notify "任务 {{task.id}} 已阻塞 {{task.blocked_hours}} 小时"
+      neko-queue escalate {{task.id}} --to=lead

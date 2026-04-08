@@ -1,0 +1,10 @@
+#!/bin/bash
+# Git post-commit hook
+# 自动更新任务状态
+
+NEKO_DIR=".neko"
+
+if [ -f "$NEKO_DIR/.current_task" ]; then
+    TASK_ID=$(cat "$NEKO_DIR/.current_task")
+    echo "[NEKO] 任务 $TASK_ID 有新的提交"
+fi
