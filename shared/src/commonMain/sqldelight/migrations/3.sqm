@@ -1,0 +1,60 @@
+-- 数据库迁移：添加播放统计表
+-- 版本 2 -> 3
+
+-- 每日播放统计表
+CREATE TABLE PlayStatsDaily (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    date TEXT NOT NULL UNIQUE,
+    totalPlays INTEGER NOT NULL DEFAULT 0,
+    uniqueSongs INTEGER NOT NULL DEFAULT 0,
+    totalDuration INTEGER NOT NULL DEFAULT 0,
+    bilibiliPlays INTEGER NOT NULL DEFAULT 0,
+    miguPlays INTEGER NOT NULL DEFAULT 0,
+    localPlays INTEGER NOT NULL DEFAULT 0,
+    hour00 INTEGER DEFAULT 0, hour01 INTEGER DEFAULT 0,
+    hour02 INTEGER DEFAULT 0, hour03 INTEGER DEFAULT 0,
+    hour04 INTEGER DEFAULT 0, hour05 INTEGER DEFAULT 0,
+    hour06 INTEGER DEFAULT 0, hour07 INTEGER DEFAULT 0,
+    hour08 INTEGER DEFAULT 0, hour09 INTEGER DEFAULT 0,
+    hour10 INTEGER DEFAULT 0, hour11 INTEGER DEFAULT 0,
+    hour12 INTEGER DEFAULT 0, hour13 INTEGER DEFAULT 0,
+    hour14 INTEGER DEFAULT 0, hour15 INTEGER DEFAULT 0,
+    hour16 INTEGER DEFAULT 0, hour17 INTEGER DEFAULT 0,
+    hour18 INTEGER DEFAULT 0, hour19 INTEGER DEFAULT 0,
+    hour20 INTEGER DEFAULT 0, hour21 INTEGER DEFAULT 0,
+    hour22 INTEGER DEFAULT 0, hour23 INTEGER DEFAULT 0,
+    updatedAt INTEGER NOT NULL
+);
+
+CREATE INDEX idx_playStatsDaily_date ON PlayStatsDaily(date);
+CREATE INDEX idx_playStatsDaily_updatedAt ON PlayStatsDaily(updatedAt);
+
+-- 艺术家播放统计表
+CREATE TABLE PlayStatsArtist (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    artistName TEXT NOT NULL UNIQUE,
+    artistId TEXT,
+    totalPlays INTEGER NOT NULL DEFAULT 0,
+    totalDuration INTEGER NOT NULL DEFAULT 0,
+    uniqueSongs INTEGER NOT NULL DEFAULT 0,
+    firstPlayedAt INTEGER,
+    lastPlayedAt INTEGER,
+    updatedAt INTEGER NOT NULL
+);
+
+CREATE INDEX idx_playStatsArtist_plays ON PlayStatsArtist(totalPlays DESC);
+CREATE INDEX idx_playStatsArtist_duration ON PlayStatsArtist(totalDuration DESC);
+
+-- 歌曲播放统计表
+CREATE TABLE PlayStatsSong (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    songId TEXT NOT NULL UNIQUE,
+    songJson TEXT NOT NULL,
+    totalPlays INTEGER NOT NULL DEFAULT 0,
+    totalDuration INTEGER NOT NULL DEFAULT 0,
+    firstPlayedAt INTEGER,
+    lastPlayedAt INTEGER,
+    updatedAt INTEGER NOT NULL
+);
+
+CREATE INDEX idx_playStatsSong_plays ON PlayStatsSong(totalPlays DESC);

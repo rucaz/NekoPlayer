@@ -1,11 +1,13 @@
 package com.nekoplayer.di
 
 import com.nekoplayer.data.api.BiliLoginApi
+import com.nekoplayer.data.api.BiliSubtitleApi
 import com.nekoplayer.data.api.BilibiliApi
 import com.nekoplayer.data.api.MiguApi
 import com.nekoplayer.data.repository.PlayHistoryRepository
 import com.nekoplayer.data.repository.PlaybackRepository
 import com.nekoplayer.data.repository.PlaylistRepository
+import com.nekoplayer.data.repository.StatsRepository
 import com.nekoplayer.data.repository.UserRepository
 import com.nekoplayer.database.DriverFactory
 import com.nekoplayer.database.NekoDatabase
@@ -34,6 +36,7 @@ val androidModule = module {
     single { PlaylistRepository(get()) }
     single { PlaybackRepository(get()) }
     single { PlayHistoryRepository(get()) }
+    single { StatsRepository(get()) }
     
     // HTTP Engine
     single<HttpClientEngine> { OkHttp.create() }
@@ -41,6 +44,7 @@ val androidModule = module {
     // API
     single { BilibiliApi(get()) }
     single { BiliLoginApi(get()) }
+    single { BiliSubtitleApi(get()) }
     single { MiguApi(get()) }
     
     // ViewModel - 使用single让搜索状态在页面间保持
@@ -56,7 +60,7 @@ val androidModule = module {
     single { com.nekoplayer.player.SleepTimer(get(), org.koin.core.context.GlobalContext.get().get()) }
     
     // Play History Tracker
-    single { com.nekoplayer.player.PlayHistoryTracker(get(), get()) }
+    single { com.nekoplayer.player.PlayHistoryTracker(get(), get(), get()) }
     
     // Audio Fingerprint
     single { com.nekoplayer.audio.fingerprint.ChromaprintFingerprinter() }
