@@ -1,6 +1,6 @@
 package com.nekoplayer.player
 
-import com.nekoplayer.data.model.PlayerState
+import com.nekoplayer.data.model.Song
 import com.nekoplayer.data.repository.PlayHistoryRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -8,154 +8,147 @@ import kotlinx.coroutines.flow.*
 /**
  * 播放历史追踪器
  * 
- * 自动监听播放状态，当播放进度超过30%时记录到播放历史
+ * 监听播放器状态，自动记录播放历史：
+ * - 播放进度超过30%时记录
+ * - 同一首歌5分钟内不重复记录
+ * - 支持播放会话追踪
  */
 class PlayHistoryTracker(
     private val audioPlayer: AudioPlayer,
-    private val playHistoryRepository: PlayHistoryRepository,
-    private val coroutineScope: CoroutineScope
+    private val playHistoryRepository: PlayHistoryRepository
 ) {
-    // 当前歌曲已播放时长
-    private var currentPlayDuration: Long = 0
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     
-    // 当前歌曲总时长
-    private var currentSongDuration: Long = 0
+    // 当前播放会话
+    private var currentSession: PlaySession? = null
     
-    // 当前歌曲
-    private var currentSong: com.nekoplayer.data.model.Song? = null
+    // 已记录的历史（用于去重）
+    private val recentRecords = mutableMapOf<String, Long>()
     
-    // 播放会话ID（用于同一session内的去重）
-    private var currentSessionId: String = generateSessionId()
+    // 去重时间窗口（5分钟）
+    private val dedupWindowMs = 5 * 60 * 1000L
     
-    // 上次记录时间（避免重复记录）
-    private var lastRecordTime: Long = 0
+    // 记录阈值（30%）
+    private val recordThresholdPercent = 30
     
-    // 记录间隔（5分钟内不重复记录同一首歌）
-    private val RECORD_INTERVAL_MS = 5 * 60 * 1000
-    
-    // 播放进度追踪job
-    private var trackingJob: Job? = null
+    init {
+        startTracking()
+    }
     
     /**
-     * 开始追踪
+     * 开始追踪播放状态
      */
-    fun start() {
-        // 监听播放状态变化
-        coroutineScope.launch {
-            audioPlayer.state.collect { state ->
+    private fun startTracking() {
+        // 监听播放器状态变化
+        audioPlayer.playerState
+            .distinctUntilChanged()
+            .onEach { state ->
                 when (state) {
-                    is PlayerState.Playing -> startTracking()
-                    is PlayerState.Paused, PlayerState.IDLE -> stopTracking()
+                    is PlayerState.Playing -> {
+                        startNewSession(state.song)
+                    }
+                    is PlayerState.Paused -> {
+                        currentSession?.pause()
+                    }
+                    is PlayerState.Idle,
+                    is PlayerState.Error -> {
+                        endCurrentSession()
+                    }
                     else -> {}
                 }
             }
-        }
+            .launchIn(scope)
         
-        // 监听歌曲变化
-        coroutineScope.launch {
-            audioPlayer.currentSong.collect { song ->
-                if (song?.id != currentSong?.id) {
-                    // 歌曲变化时，先记录上一首的播放
-                    recordCurrentPlay()
-                    // 重置追踪状态
-                    resetTracking(song)
+        // 监听播放进度
+        combine(
+            audioPlayer.currentPosition,
+            audioPlayer.duration,
+            audioPlayer.playerState
+        ) { position, duration, state ->
+            Triple(position, duration, state)
+        }
+            .filter { (_, duration, state) ->
+                // 只处理有有效时长的播放状态
+                duration > 0 && state is PlayerState.Playing
+            }
+            .onEach { (position, duration, _) ->
+                currentSession?.updateProgress(position, duration)
+                
+                // 检查是否达到记录阈值
+                val percent = ((position * 100) / duration).toInt()
+                if (percent >= recordThresholdPercent) {
+                    tryRecordHistory()
+                }
+            }
+            .launchIn(scope)
+    }
+    
+    /**
+     * 开始新的播放会话
+     */
+    private fun startNewSession(song: Song) {
+        // 如果之前有会话，先结束它
+        endCurrentSession()
+        
+        currentSession = PlaySession(
+            song = song,
+            startTime = System.currentTimeMillis()
+        )
+    }
+    
+    /**
+     * 结束当前会话
+     */
+    private fun endCurrentSession() {
+        currentSession?.let { session ->
+            session.end()
+            
+            // 如果已经达到阈值，记录历史
+            if (session.hasReachedThreshold(recordThresholdPercent)) {
+                scope.launch {
+                    recordPlayHistory(session)
                 }
             }
         }
+        currentSession = null
+    }
+    
+    /**
+     * 尝试记录播放历史（带去重）
+     */
+    private suspend fun tryRecordHistory() {
+        val session = currentSession ?: return
+        val song = session.song
         
-        // 监听时长变化
-        coroutineScope.launch {
-            audioPlayer.duration.collect { duration ->
-                currentSongDuration = duration
-            }
+        // 检查是否已经记录过（去重）
+        val lastRecordTime = recentRecords[song.id]
+        val now = System.currentTimeMillis()
+        
+        if (lastRecordTime != null && (now - lastRecordTime) < dedupWindowMs) {
+            // 5分钟内已记录过，跳过
+            return
         }
-    }
-    
-    /**
-     * 停止追踪
-     */
-    fun stop() {
-        trackingJob?.cancel()
-        recordCurrentPlay()
-    }
-    
-    /**
-     * 开始追踪播放时长
-     */
-    private fun startTracking() {
-        trackingJob?.cancel()
-        trackingJob = coroutineScope.launch {
-            while (isActive) {
-                delay(1000) // 每秒更新
-                currentPlayDuration += 1000
-                
-                // 检查是否需要自动记录（播放超过30%且未记录过）
-                checkAndAutoRecord()
-            }
-        }
-    }
-    
-    /**
-     * 停止追踪播放时长
-     */
-    private fun stopTracking() {
-        trackingJob?.cancel()
-        trackingJob = null
-    }
-    
-    /**
-     * 重置追踪状态
-     */
-    private fun resetTracking(song: com.nekoplayer.data.model.Song?) {
-        currentSong = song
-        currentPlayDuration = 0
-        currentSongDuration = 0
-        currentSessionId = generateSessionId()
-        lastRecordTime = 0
-    }
-    
-    /**
-     * 检查并自动记录播放历史
-     */
-    private suspend fun checkAndAutoRecord() {
-        val song = currentSong ?: return
-        if (currentSongDuration <= 0) return
         
-        val progressPercent = (currentPlayDuration * 100) / currentSongDuration
+        // 标记为已记录
+        recentRecords[song.id] = now
         
-        // 播放超过30%且距离上次记录超过5分钟
-        if (progressPercent >= 30 && 
-            System.currentTimeMillis() - lastRecordTime > RECORD_INTERVAL_MS) {
-            
-            recordPlay(song, currentPlayDuration, currentSongDuration)
-            lastRecordTime = System.currentTimeMillis()
-        }
+        // 清理过期的去重记录
+        cleanupRecentRecords()
+        
+        // 记录到数据库
+        recordPlayHistory(session)
     }
     
     /**
-     * 记录当前播放
+     * 记录播放历史到数据库
      */
-    private suspend fun recordCurrentPlay() {
-        val song = currentSong ?: return
-        if (currentPlayDuration <= 0 || currentSongDuration <= 0) return
-        
-        recordPlay(song, currentPlayDuration, currentSongDuration)
-    }
-    
-    /**
-     * 记录播放
-     */
-    private suspend fun recordPlay(
-        song: com.nekoplayer.data.model.Song,
-        playDuration: Long,
-        songDuration: Long
-    ) {
+    private suspend fun recordPlayHistory(session: PlaySession) {
         try {
             playHistoryRepository.recordPlay(
-                song = song,
-                playDuration = playDuration,
-                songDuration = songDuration,
-                sessionId = currentSessionId
+                song = session.song,
+                playDuration = session.getPlayDuration(),
+                songDuration = session.songDuration,
+                sessionId = session.sessionId
             )
         } catch (e: Exception) {
             // 记录失败不中断播放
@@ -164,18 +157,77 @@ class PlayHistoryTracker(
     }
     
     /**
-     * 手动记录播放（用于用户主动点击播放）
+     * 清理过期的去重记录
      */
-    suspend fun manualRecord(song: com.nekoplayer.data.model.Song) {
-        recordPlay(song, playDuration = 0, songDuration = song.duration)
+    private fun cleanupRecentRecords() {
+        val now = System.currentTimeMillis()
+        recentRecords.entries.removeIf { (_, timestamp) ->
+            (now - timestamp) > dedupWindowMs
+        }
     }
     
-    companion object {
-        /**
-         * 生成会话ID
-         */
-        fun generateSessionId(): String {
-            return "${System.currentTimeMillis()}-${(0..9999).random()}"
+    /**
+     * 释放资源
+     */
+    fun release() {
+        scope.cancel()
+        endCurrentSession()
+        recentRecords.clear()
+    }
+    
+    /**
+     * 播放会话
+     */
+    private data class PlaySession(
+        val song: Song,
+        val startTime: Long,
+        val sessionId: String = java.util.UUID.randomUUID().toString()
+    ) {
+        var endTime: Long? = null
+            private set
+        
+        var songDuration: Long = 0
+            private set
+        
+        private var maxProgress: Long = 0
+        private var pauseStartTime: Long? = null
+        private var totalPauseDuration: Long = 0
+        
+        fun updateProgress(position: Long, duration: Long) {
+            maxProgress = maxOf(maxProgress, position)
+            songDuration = duration
+        }
+        
+        fun pause() {
+            if (pauseStartTime == null) {
+                pauseStartTime = System.currentTimeMillis()
+            }
+        }
+        
+        fun resume() {
+            pauseStartTime?.let { start ->
+                totalPauseDuration += System.currentTimeMillis() - start
+                pauseStartTime = null
+            }
+        }
+        
+        fun end() {
+            endTime = System.currentTimeMillis()
+            pauseStartTime?.let { start ->
+                totalPauseDuration += System.currentTimeMillis() - start
+                pauseStartTime = null
+            }
+        }
+        
+        fun getPlayDuration(): Long {
+            val end = endTime ?: System.currentTimeMillis()
+            return (end - startTime - totalPauseDuration).coerceAtLeast(0)
+        }
+        
+        fun hasReachedThreshold(thresholdPercent: Int): Boolean {
+            if (songDuration <= 0) return false
+            val percent = ((maxProgress * 100) / songDuration).toInt()
+            return percent >= thresholdPercent
         }
     }
 }
