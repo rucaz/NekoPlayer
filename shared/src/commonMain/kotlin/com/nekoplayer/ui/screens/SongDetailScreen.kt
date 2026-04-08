@@ -31,6 +31,7 @@ import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import coil3.compose.AsyncImage
+import com.nekoplayer.data.api.BiliSubtitleApi
 import com.nekoplayer.data.model.Song
 import com.nekoplayer.data.repository.StatsRepository
 import com.nekoplayer.player.QueueManager
@@ -58,12 +59,15 @@ class SongDetailScreen(
         val navigator = LocalNavigator.currentOrThrow
         val queueManager: QueueManager = koinInject()
         val statsRepository: StatsRepository? = koinInjectOrNull()
+        val biliSubtitleApi: BiliSubtitleApi? = koinInjectOrNull()
         val coroutineScope = rememberCoroutineScope()
         
         // 状态
         var showAddToPlaylist by remember { mutableStateOf(false) }
         var songStats by remember { mutableStateOf<SongStatsDisplay?>(null) }
         var isLoadingStats by remember { mutableStateOf(false) }
+        var hasLyrics by remember { mutableStateOf(false) }
+        var isCheckingLyrics by remember { mutableStateOf(false) }
         
         // 加载统计数据
         LaunchedEffect(song.id) {
@@ -78,6 +82,18 @@ class SongDetailScreen(
                     )
                 }
                 isLoadingStats = false
+            }
+        }
+        
+        // 检查是否有歌词（B站视频检查字幕）
+        LaunchedEffect(song.sourceId) {
+            if (song.source == com.nekoplayer.data.model.MusicSource.BILIBILI) {
+                isCheckingLyrics = true
+                biliSubtitleApi?.let { api ->
+                    val subtitles = api.getSubtitleList(song.sourceId)
+                    hasLyrics = subtitles.isNotEmpty()
+                }
+                isCheckingLyrics = false
             }
         }
         
@@ -121,10 +137,40 @@ class SongDetailScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 // 顶部栏
+                var showMoreMenu by remember { mutableStateOf(false) }
+                
                 DetailTopBar(
                     onBack = { navigator.pop() },
-                    onMore = { /* TODO: 更多操作菜单 */ }
+                    onMore = { showMoreMenu = true }
                 )
+                
+                // 更多操作菜单
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false },
+                    containerColor = Color(0xFF1A1A2F)
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("分享", color = Color.White) },
+                        onClick = {
+                            showMoreMenu = false
+                            // TODO: 分享功能
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.Share, contentDescription = null, tint = Color.White)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text("查看B站原视频", color = Color.White) },
+                        onClick = {
+                            showMoreMenu = false
+                            // TODO: 打开B站链接
+                        },
+                        leadingIcon = {
+                            Icon(Icons.Default.OpenInBrowser, contentDescription = null, tint = Color.White)
+                        }
+                    )
+                }
                 
                 // 可滚动内容
                 Column(
@@ -178,11 +224,17 @@ class SongDetailScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                     }
                     
-                    // 歌词入口（占位）
+                    // 歌词入口
                     LyricsEntryCard(
-                        hasLyrics = false, // TODO: 检查是否有歌词
+                        hasLyrics = hasLyrics,
+                        isLoading = isCheckingLyrics,
                         onClick = {
-                            // TODO: 跳转到歌词页
+                            if (hasLyrics) {
+                                // 歌词在NowPlaying中显示，这里只提示
+                                coroutineScope.launch {
+                                    // 可以显示Toast提示用户在播放页查看歌词
+                                }
+                            }
                         }
                     )
                     
@@ -530,18 +582,20 @@ private fun StatItem(
 @Composable
 private fun LyricsEntryCard(
     hasLyrics: Boolean,
+    isLoading: Boolean,
     onClick: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(enabled = hasLyrics, onClick = onClick),
+            .clickable(enabled = hasLyrics && !isLoading, onClick = onClick),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (hasLyrics) 
-                Color(0xFF00D4FF).copy(alpha = 0.1f)
-            else 
-                Color.White.copy(alpha = 0.03f)
+            containerColor = when {
+                isLoading -> Color.White.copy(alpha = 0.03f)
+                hasLyrics -> Color(0xFF00D4FF).copy(alpha = 0.1f)
+                else -> Color.White.copy(alpha = 0.03f)
+            }
         )
     ) {
         Row(
@@ -554,32 +608,48 @@ private fun LyricsEntryCard(
             Row(
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    imageVector = Icons.Default.Lyrics,
-                    contentDescription = null,
-                    tint = if (hasLyrics) Color(0xFF00D4FF) else Color.White.copy(alpha = 0.3f),
-                    modifier = Modifier.size(24.dp)
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = Color(0xFF00D4FF),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Lyrics,
+                        contentDescription = null,
+                        tint = if (hasLyrics) Color(0xFF00D4FF) else Color.White.copy(alpha = 0.3f),
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 
                 Spacer(modifier = Modifier.width(16.dp))
                 
                 Column {
                     Text(
                         text = "歌词",
-                        color = if (hasLyrics) Color.White else Color.White.copy(alpha = 0.5f),
+                        color = when {
+                            isLoading -> Color.White.copy(alpha = 0.5f)
+                            hasLyrics -> Color.White
+                            else -> Color.White.copy(alpha = 0.5f)
+                        },
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     )
                     
                     Text(
-                        text = if (hasLyrics) "点击查看歌词" else "暂无歌词",
+                        text = when {
+                            isLoading -> "检查中..."
+                            hasLyrics -> "播放页可查看歌词"
+                            else -> "暂无歌词"
+                        },
                         color = Color.White.copy(alpha = 0.4f),
                         fontSize = 12.sp
                     )
                 }
             }
             
-            if (hasLyrics) {
+            if (!isLoading && hasLyrics) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                     contentDescription = null,
