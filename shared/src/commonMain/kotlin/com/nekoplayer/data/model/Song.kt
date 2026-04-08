@@ -26,7 +26,8 @@ data class Song(
 @Serializable
 enum class MusicSource {
     BILIBILI,
-    MIGU
+    MIGU,
+    LOCAL
 }
 
 /**
