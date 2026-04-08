@@ -48,6 +48,9 @@ val iosModule = module {
 
     // Queue Manager (单例，全局共享)
     single { QueueManager() }
+    
+    // Sleep Timer
+    single { com.nekoplayer.player.SleepTimer(get(), org.koin.core.context.GlobalContext.get().get()) }
 }
 
 /**
