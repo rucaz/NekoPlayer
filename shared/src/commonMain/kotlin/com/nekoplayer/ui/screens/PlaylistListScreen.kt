@@ -8,9 +8,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import cafe.adriel.voyager.core.screen.Screen
 import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
+import com.nekoplayer.data.repository.PlayHistoryRepository
 import com.nekoplayer.data.repository.PlaylistRepository
 import com.nekoplayer.database.Playlist
 import com.nekoplayer.utils.currentTimeMillis
@@ -43,7 +42,10 @@ class PlaylistListScreen : Screen {
         val scope = rememberCoroutineScope()
 
         val playlists by playlistRepository.getAllPlaylists().collectAsState(initial = emptyList())
+        val recentPlays by playHistoryRepository.getRecentPlays(limit = 500).collectAsState(initial = emptyList())
+        
         var showCreateDialog by remember { mutableStateOf(false) }
+        var showClearHistoryDialog by remember { mutableStateOf(false) }
 
         Box(
             modifier = Modifier
@@ -59,7 +61,18 @@ class PlaylistListScreen : Screen {
                     onCreateClick = { showCreateDialog = true }
                 )
 
-                if (playlists.isEmpty()) {
+                // 虚拟歌单区域：最近播放
+                if (recentPlays.isNotEmpty()) {
+                    RecentPlaysCard(
+                        songCount = recentPlays.size,
+                        onClick = {
+                            navigator.push(RecentPlaysScreen())
+                        },
+                        onClearClick = { showClearHistoryDialog = true }
+                    )
+                }
+
+                if (playlists.isEmpty() && recentPlays.isEmpty()) {
                     // 空状态
                     EmptyState(onCreateClick = { showCreateDialog = true })
                 } else {
@@ -92,6 +105,19 @@ class PlaylistListScreen : Screen {
                     scope.launch {
                         playlistRepository.createPlaylist(name)
                         showCreateDialog = false
+                    }
+                }
+            )
+        }
+        
+        // 清空历史确认弹窗
+        if (showClearHistoryDialog) {
+            ClearHistoryDialog(
+                onDismiss = { showClearHistoryDialog = false },
+                onConfirm = {
+                    scope.launch {
+                        playHistoryRepository.clearAll()
+                        showClearHistoryDialog = false
                     }
                 }
             )
@@ -307,4 +333,131 @@ private fun formatDate(timestamp: Long): String {
             "${daysAgo}天前"
         }
     }
+}
+
+/**
+ * 最近播放卡片（虚拟歌单）
+ */
+@Composable
+private fun RecentPlaysCard(
+    songCount: Int,
+    onClick: () -> Unit,
+    onClearClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF1A1A2F)
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF00D4FF).copy(alpha = 0.3f),
+                                Color(0xFF9C27B0).copy(alpha = 0.3f)
+                            )
+                        )
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.History,
+                    contentDescription = null,
+                    tint = Color(0xFF00D4FF),
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(16.dp))
+            
+            // 文字信息
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = "最近播放",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = "$songCount 首歌曲",
+                    color = Color.White.copy(alpha = 0.5f),
+                    fontSize = 12.sp
+                )
+            }
+            
+            // 清空按钮
+            IconButton(onClick = onClearClick) {
+                Icon(
+                    imageVector = Icons.Default.DeleteOutline,
+                    contentDescription = "清空历史",
+                    tint = Color.White.copy(alpha = 0.5f)
+                )
+            }
+            
+            // 箭头
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.3f)
+            )
+        }
+    }
+}
+
+/**
+ * 清空历史确认弹窗
+ */
+@Composable
+private fun ClearHistoryDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "清空播放历史",
+                color = Color.White
+            )
+        },
+        text = {
+            Text(
+                text = "确定要清空所有播放历史记录吗？此操作不可恢复。",
+                color = Color.White.copy(alpha = 0.7f)
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm
+            ) {
+                Text("清空", color = Color(0xFFE91E63))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("取消", color = Color.White.copy(alpha = 0.6f))
+            }
+        },
+        containerColor = Color(0xFF1A1A2F)
+    )
 }
