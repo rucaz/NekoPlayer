@@ -499,3 +499,191 @@ private fun ActionItem(
         )
     }
 }
+
+/**
+ * 批量添加到歌单选择器
+ */
+@Composable
+fun AddMultipleToPlaylistDialog(
+    songs: List<Song>,
+    onDismiss: () -> Unit
+) {
+    val playlistRepository: PlaylistRepository = koinInject()
+    val scope = rememberCoroutineScope()
+
+    val playlists by playlistRepository.getAllPlaylists().collectAsState(initial = emptyList())
+    var isLoading by remember { mutableStateOf(false) }
+    var showCreateNew by remember { mutableStateOf(false) }
+    var addingPlaylistId by remember { mutableStateOf<String?>(null) }
+    var addedCount by remember { mutableStateOf(0) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 400.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = Color(0xFF1A1A2F)
+            )
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // 标题
+                Text(
+                    text = "添加 ${songs.size} 首歌曲到歌单",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    modifier = Modifier.padding(16.dp)
+                )
+
+                if (addedCount > 0) {
+                    Text(
+                        text = "已添加 $addedCount/${songs.size} 首",
+                        color = Color(0xFF00D4FF),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+
+                Divider(color = Color.White.copy(alpha = 0.1f))
+
+                if (showCreateNew) {
+                    CreatePlaylistInline(
+                        onCreate = { name ->
+                            scope.launch {
+                                val playlistId = playlistRepository.createPlaylist(name)
+                                // 批量添加
+                                isLoading = true
+                                addingPlaylistId = playlistId
+                                var count = 0
+                                songs.forEach { song ->
+                                    if (playlistRepository.addSongToPlaylist(playlistId, song)) {
+                                        count++
+                                    }
+                                }
+                                addedCount = count
+                                isLoading = false
+                                addingPlaylistId = null
+                                onDismiss()
+                            }
+                        },
+                        onCancel = { showCreateNew = false }
+                    )
+                } else {
+                    // 新建歌单按钮
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showCreateNew = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            tint = Color(0xFF00D4FF),
+                            modifier = Modifier.size(24.dp)
+                        )
+
+                        Spacer(modifier = Modifier.width(12.dp))
+
+                        Text(
+                            text = "新建歌单",
+                            color = Color(0xFF00D4FF),
+                            fontSize = 16.sp
+                        )
+                    }
+
+                    Divider(color = Color.White.copy(alpha = 0.1f))
+                }
+
+                // 歌单列表
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(playlists, key = { it.id }) { playlist ->
+                        val isAdding = addingPlaylistId == playlist.id
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isAdding) {
+                                    scope.launch {
+                                        isLoading = true
+                                        addingPlaylistId = playlist.id
+                                        var count = 0
+                                        songs.forEach { song ->
+                                            if (playlistRepository.addSongToPlaylist(playlist.id, song)) {
+                                                count++
+                                            }
+                                        }
+                                        addedCount = count
+                                        isLoading = false
+                                        addingPlaylistId = null
+                                        onDismiss()
+                                    }
+                                }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFF2A2A3F)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isAdding) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = Color(0xFF00D4FF),
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.PlaylistPlay,
+                                        contentDescription = null,
+                                        tint = Color.White.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(
+                                    text = playlist.name,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+
+                                Text(
+                                    text = "${playlist.songCount} 首歌曲",
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // 取消按钮
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text("取消", color = Color.White.copy(alpha = 0.6f))
+                }
+            }
+        }
+    }
+}
