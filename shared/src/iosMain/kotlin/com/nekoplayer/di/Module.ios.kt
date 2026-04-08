@@ -51,6 +51,11 @@ val iosModule = module {
     
     // Sleep Timer
     single { com.nekoplayer.player.SleepTimer(get(), org.koin.core.context.GlobalContext.get().get()) }
+    
+    // Audio Fingerprint
+    single { com.nekoplayer.audio.fingerprint.ChromaprintFingerprinter() }
+    single { com.nekoplayer.audio.fingerprint.VectorIndex() }
+    single { com.nekoplayer.audio.fingerprint.HumRecognizer(get(), get()) }
 }
 
 /**
