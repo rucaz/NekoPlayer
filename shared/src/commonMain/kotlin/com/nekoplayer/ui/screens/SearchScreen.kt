@@ -13,6 +13,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -89,6 +90,16 @@ class SearchScreen : Screen {
                         Icon(
                             imageVector = Icons.Default.PlaylistPlay,
                             contentDescription = "我的歌单",
+                            tint = Color(0xFF00D4FF)
+                        )
+                    }
+                    
+                    IconButton(
+                        onClick = { navigator.push(StatsScreen()) }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BarChart,
+                            contentDescription = "统计",
                             tint = Color(0xFF00D4FF)
                         )
                     }
@@ -332,6 +343,7 @@ private fun SourceTag(source: MusicSource) {
     val (text, color) = when (source) {
         MusicSource.BILIBILI -> "bilibili" to Color(0xFFFF69B4)  // 粉红色
         MusicSource.MIGU -> "migu" to Color(0xFF00D4FF)          // 粉蓝色
+        MusicSource.LOCAL -> "本地" to Color(0xFF4CAF50)         // 绿色
     }
 
     Text(

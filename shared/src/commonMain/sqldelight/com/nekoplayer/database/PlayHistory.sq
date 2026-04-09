@@ -65,9 +65,9 @@ INSERT INTO PlayHistory(
 getPlayCountStats:
 SELECT 
     songId,
-    COUNT(*) as playCount,
-    SUM(playDuration) as totalPlayDuration,
-    MAX(playedAt) as lastPlayedAt
+    COUNT(*) playCount,
+    SUM(playDuration) totalPlayDuration,
+    MAX(playedAt) lastPlayedAt
 FROM PlayHistory
 GROUP BY songId
 ORDER BY playCount DESC

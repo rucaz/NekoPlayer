@@ -25,6 +25,7 @@ import cafe.adriel.voyager.navigator.LocalNavigator
 import cafe.adriel.voyager.navigator.currentOrThrow
 import com.nekoplayer.data.repository.PlayHistoryRepository
 import com.nekoplayer.data.repository.PlaylistRepository
+import org.koin.compose.koinInject
 import com.nekoplayer.database.Playlist
 import com.nekoplayer.utils.currentTimeMillis
 import kotlinx.coroutines.launch
@@ -459,5 +460,8 @@ private fun ClearHistoryDialog(
             }
         },
         containerColor = Color(0xFF1A1A2F)
+    )
+}
+nerColor = Color(0xFF1A1A2F)
     )
 }
